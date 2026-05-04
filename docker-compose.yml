@@ -1,0 +1,83 @@
+# Signal S&P — local development stack.
+# Brings up: Postgres 16, Mailpit (SMTP catcher), and the Next.js web app.
+#
+# Quickstart (Compose V2 — `docker compose`, with a space):
+#   cp .env.example .env.local           # then edit AUTH_SECRET
+#   docker compose up --build
+#   docker compose exec web pnpm db:migrate
+#   docker compose exec web pnpm db:seed
+#
+# UIs (host-side ports — remapped to avoid collisions):
+#   Web   http://localhost:3000
+#   Mail  http://localhost:18025  (Mailpit catches every outbound email)
+#   DB    localhost:55432         (snp / snp / snp)
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: snp
+      POSTGRES_PASSWORD: snp
+      POSTGRES_DB: snp
+    ports:
+      # Host port chosen to avoid colliding with any locally-running Postgres
+      # or other Docker stacks. Container-side stays 5432 because the web
+      # service talks to db over Docker's internal network.
+      - "55432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snp -d snp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mail:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      # Host ports remapped to avoid collisions; container-side stays default.
+      - "11025:1025"   # SMTP   (host:container)
+      - "18025:8025"   # Web UI (host:container)
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      mail:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      APP_BASE_URL: http://localhost:3000
+      DATABASE_URL: postgresql://snp:snp@db:5432/snp?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-me}
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      MAIL_HOST: mail
+      MAIL_PORT: "1025"
+      MAIL_SECURE: "false"
+      MAIL_FROM: "Signal S&P <no-reply@signalsp.local>"
+      ENABLE_DEV_ROUTES: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  db-data:

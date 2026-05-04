@@ -1,0 +1,28 @@
+# Signal S&P — development image.
+# Production Dockerfile will be added once the deploy target is decided.
+FROM node:20-alpine
+
+# pnpm via corepack (matches engines.packageManager in package.json).
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+# OpenSSL is required by Prisma at runtime.
+RUN apk add --no-cache openssl libc6-compat
+
+WORKDIR /app
+
+# Install deps first for better layer caching.
+# Copy the Prisma schema *before* install so the `postinstall: prisma generate`
+# hook in package.json can find ./prisma/schema.prisma. Without this the
+# install step fails with "Could not find Prisma Schema".
+COPY package.json pnpm-lock.yaml* ./
+COPY prisma ./prisma
+RUN pnpm install --frozen-lockfile=false
+
+COPY . .
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+EXPOSE 3000
+
+CMD ["pnpm", "dev"]

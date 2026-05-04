@@ -1,0 +1,60 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (keep examples)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# editor / OS
+.idea
+.vscode
+*.swp
+
+# prisma
+/prisma/dev.db*
+
+# docker
+/.docker-data
+
+# build-sandbox zombies (FUSE leftovers from initial scaffold)
+_tmp_*
+
+# pnpm content-addressable store — should live in ~/.local/share/pnpm/store,
+# never inside the project. If this folder appears it's because pnpm couldn't
+# reach its default store path (e.g. inside a container without HOME set).
+# See docs/runbooks/getting-started.md → "pnpm store ends up inside the project".
+.pnpm-store/
+.npm/
+.cache/

@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Signal S&P design tokens.
+ *
+ * This is the ONLY stylesheet in the project. Per platform-brd.md §4.2,
+ * components must compose Tailwind utilities; no per-component custom CSS.
+ *
+ * Brand palette (from html/css/signal-design-system.css):
+ *   navy   #2C2F3C  -> brand ink
+ *   blue   #248FF9  -> brand primary accent
+ *   cyan   #1FD6FF  -> brand secondary accent
+ *   bg     #F4F6F8  -> light surface
+ *   sidebar-dark #12181B -> dark navigation rail
+ *
+ * shadcn semantic tokens map to these so utility classes like `bg-primary`
+ * and `text-primary-foreground` produce the correct brand result.
+ */
+
+@layer base {
+  :root {
+    --background: 210 22% 97%;            /* #F4F6F8 */
+    --foreground: 225 14% 21%;            /* #2C2F3C */
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 14% 21%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 14% 21%;
+
+    --primary: 211 95% 56%;               /* #248FF9 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 22% 94%;
+    --secondary-foreground: 225 14% 21%;
+
+    --muted: 210 22% 94%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 188 100% 56%;               /* #1FD6FF */
+    --accent-foreground: 225 14% 21%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 211 95% 56%;
+
+    --radius: 0.5rem;
+
+    /* Brand semantic aliases. */
+    --brand: 225 14% 21%;
+    --brand-foreground: 0 0% 100%;
+    --brand-accent: 211 95% 56%;
+    --brand-surface: 210 22% 97%;
+    --brand-ink: 225 14% 21%;
+  }
+
+  .dark {
+    --background: 215 28% 9%;             /* #12181B */
+    --foreground: 210 22% 88%;
+
+    --card: 222 22% 14%;
+    --card-foreground: 210 22% 88%;
+
+    --popover: 222 22% 14%;
+    --popover-foreground: 210 22% 88%;
+
+    --primary: 211 95% 56%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 22% 18%;
+    --secondary-foreground: 210 22% 88%;
+
+    --muted: 222 22% 18%;
+    --muted-foreground: 220 9% 65%;
+
+    --accent: 188 100% 56%;
+    --accent-foreground: 225 14% 21%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 22% 22%;
+    --input: 222 22% 22%;
+    --ring: 211 95% 56%;
+
+    --brand: 0 0% 100%;
+    --brand-foreground: 225 14% 21%;
+    --brand-accent: 188 100% 56%;
+    --brand-surface: 215 28% 9%;
+    --brand-ink: 210 22% 88%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
