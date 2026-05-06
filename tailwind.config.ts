@@ -66,6 +66,23 @@ const config: Config = {
           surface: "hsl(var(--brand-surface))",
           ink: "hsl(var(--brand-ink))",
         },
+        // Sidebar — always dark, regardless of theme.
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          muted: "hsl(var(--sidebar-muted))",
+          active: "hsl(var(--sidebar-active))",
+          border: "hsl(var(--sidebar-border))",
+          hover: "hsl(var(--sidebar-hover))",
+        },
+        // Signal accent palette — KPI tiles, alert chips, chart series.
+        signal: {
+          green:   "hsl(var(--signal-green))",
+          magenta: "hsl(var(--signal-magenta))",
+          orange:  "hsl(var(--signal-orange))",
+          purple:  "hsl(var(--signal-purple))",
+          yellow:  "hsl(var(--signal-yellow))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -75,6 +92,24 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-lato)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
+        // Display font — used for the brand mark and prototype h1/h2.
+        display: ["var(--font-display)", "var(--font-lato)", "system-ui", "sans-serif"],
+      },
+      // Type scale mirrors the prototype's --text-* tokens from
+      // html/assets/css/signal-design-system.css. Tailwind's default scale
+      // (text-sm = 14px, text-base = 16px, text-lg = 18px) is bigger than
+      // the prototype's, so we override the entire scale here. Components can
+      // also use exact-pixel arbitrary values like `text-[12px]` when needed.
+      fontSize: {
+        xs:   ["11px", { lineHeight: "1.4" }],   // --text-xs
+        sm:   ["12px", { lineHeight: "1.5" }],   // --text-sm
+        md:   ["14px", { lineHeight: "1.5" }],   // --text-md
+        base: ["14px", { lineHeight: "1.5" }],   // alias for md
+        lg:   ["16px", { lineHeight: "1.4" }],   // --text-lg
+        xl:   ["20px", { lineHeight: "1.3" }],   // --text-xl
+        "2xl":["24px", { lineHeight: "1.2" }],   // --text-2xl
+        "3xl":["28px", { lineHeight: "1.15" }],  // larger display
+        "4xl":["32px", { lineHeight: "1.1" }],
       },
       keyframes: {
         "accordion-down": {

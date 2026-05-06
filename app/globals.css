@@ -57,6 +57,21 @@
     --brand-accent: 211 95% 56%;
     --brand-surface: 210 22% 97%;
     --brand-ink: 225 14% 21%;
+
+    /* Sidebar — always dark navy regardless of light/dark theme. */
+    --sidebar: 195 18% 9%;              /* #12181B */
+    --sidebar-foreground: 210 22% 84%;  /* #C8D6E0 */
+    --sidebar-muted: 199 16% 49%;       /* #6B8192 */
+    --sidebar-active: 207 36% 17%;      /* #1B2C3A */
+    --sidebar-border: 211 16% 20%;      /* #2A353C */
+    --sidebar-hover: 198 16% 14%;       /* #1E272C */
+
+    /* Signal accent palette — used for KPI tiles, alert chips, charts. */
+    --signal-green:   162 87% 44%;      /* #0FD29A */
+    --signal-magenta: 327 84% 54%;      /* #EC298C */
+    --signal-orange:   30 100% 56%;     /* #FF961F */
+    --signal-purple:  270 100% 71%;     /* #B870FF */
+    --signal-yellow:   49 99% 48%;      /* #F2C602 */
   }
 
   .dark {

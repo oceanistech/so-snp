@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,12 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SignalSpMark } from "@/components/brand/signal-sp-mark";
-import { auth, signOut } from "@/auth";
-
-async function signOutAction() {
-  "use server";
-  await signOut({ redirectTo: "/" });
-}
+import { auth } from "@/auth";
 
 const modules = [
   {
@@ -39,8 +35,11 @@ const modules = [
 ] as const;
 
 export default async function HomePage() {
+  // Signed-in visitors go straight to the app shell.
   const session = await auth();
-  const user = session?.user;
+  if (session?.user) {
+    redirect("/dashboard");
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-muted/40">
@@ -59,25 +58,9 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {user ? (
-              <>
-                <div className="rounded-md border bg-muted/50 px-3 py-1.5 text-sm">
-                  Signed in as{" "}
-                  <span className="font-medium text-foreground">
-                    {user.email ?? user.name ?? "user"}
-                  </span>
-                </div>
-                <form action={signOutAction}>
-                  <Button type="submit" variant="outline">
-                    Sign out
-                  </Button>
-                </form>
-              </>
-            ) : (
-              <Button asChild>
-                <Link href="/sign-in">Sign in</Link>
-              </Button>
-            )}
+            <Button asChild>
+              <Link href="/sign-in">Sign in</Link>
+            </Button>
             <Button asChild variant="outline">
               <Link href="/api/health">Health</Link>
             </Button>
