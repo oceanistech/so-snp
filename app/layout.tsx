@@ -1,12 +1,27 @@
 import type { Metadata } from "next";
-import { Lato, JetBrains_Mono } from "next/font/google";
+import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const lato = Lato({
-  weight: ["300", "400", "700", "900"],
+/** Body font — Inter, matching the prototype's `--font: 'Inter'` from
+ *  html/assets/css/signal-design-system.css. The CSS variable is still
+ *  named `--font-lato` for backwards compatibility with `tailwind.config.ts`
+ *  (which sets `font-sans` to that variable); only the underlying typeface
+ *  changes. Inter has a noticeably larger x-height than Lato, so 12 px text
+ *  reads at the same visual size as the prototype. */
+const inter = Inter({
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
   variable: "--font-lato",
+  display: "swap",
+});
+
+/** Display font — used for the brand mark and h1/h2 in the prototype.
+ *  Mirrors `--font-display: 'Inter Tight'` from html/assets/css/signal-design-system.css. */
+const interTight = Inter_Tight({
+  weight: ["400", "600", "700", "800", "900"],
+  subsets: ["latin"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -35,7 +50,8 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
-          lato.variable,
+          inter.variable,
+          interTight.variable,
           jetbrainsMono.variable,
         )}
       >

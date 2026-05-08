@@ -20,7 +20,7 @@ async function credentialsAction(formData: FormData) {
   await signIn("credentials", {
     email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
-    redirectTo: "/",
+    redirectTo: "/dashboard",
   });
 }
 
@@ -28,7 +28,7 @@ async function emailAction(formData: FormData) {
   "use server";
   await signIn("email", {
     email: String(formData.get("email") ?? ""),
-    redirectTo: "/",
+    redirectTo: "/dashboard",
   });
 }
 
