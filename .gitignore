@@ -58,3 +58,7 @@ _tmp_*
 .pnpm-store/
 .npm/
 .cache/
+
+# Per-user pnpm/npm config (never commit — it leaks local paths like
+# /Users/<name>/... which break CI and Linux servers).
+.npmrc
