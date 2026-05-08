@@ -4,7 +4,7 @@
   "private": true,
   "description": "Signal S&P — Next.js platform for the SNP Module (web app).",
   "engines": {
-    "node": ">=20.0.0 <21.0.0",
+    "node": ">=22.0.0 <23.0.0",
     "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@9.15.0",
