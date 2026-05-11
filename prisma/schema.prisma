@@ -14,7 +14,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Used by the running app for queries. In production this points at the
+  // Supabase **transaction pooler** (port 6543, ?pgbouncer=true).
+  url       = env("DATABASE_URL")
+  // Used by `prisma migrate` and other schema-introspection commands, which
+  // need a direct (non-pooled) connection. In production this points at the
+  // Supabase **direct connection** (port 5432). Locally with docker-compose
+  // it can point at the same URL as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // -----------------------------------------------------------------------------

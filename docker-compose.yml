@@ -64,6 +64,9 @@ services:
       NODE_ENV: development
       APP_BASE_URL: http://localhost:3000
       DATABASE_URL: postgresql://snp:snp@db:5432/snp?schema=public
+      # Prisma requires DIRECT_URL for migrations. Locally we don't have a
+      # pooler, so it's the same URL as DATABASE_URL.
+      DIRECT_URL: postgresql://snp:snp@db:5432/snp?schema=public
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-me}
       AUTH_URL: http://localhost:3000
       AUTH_TRUST_HOST: "true"

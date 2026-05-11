@@ -112,7 +112,8 @@ See [`.env.example`](./.env.example) for the canonical list. Required at runtime
 
 | Var | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection string. |
+| `DATABASE_URL` | Postgres connection string used at runtime. In production points at the Supabase **transaction pooler** (port 6543). |
+| `DIRECT_URL` | Postgres connection string used by `prisma migrate`. In production points at the Supabase **direct connection** (port 5432). Locally can equal `DATABASE_URL`. |
 | `AUTH_SECRET` | Auth.js session secret. **Must** be generated with `openssl rand -base64 32`. |
 | `AUTH_URL` | Public URL of the app, used by Auth.js for callbacks. |
 | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM` | SMTP transport. |
