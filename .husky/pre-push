@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# Runs on every `git push` from the host. Mirrors what `next build` does
+# in production by running the same checks inside the dev container.
+#
+# Requires: web service from docker-compose.yml to be running.
+# Skip in an emergency with:  git push --no-verify
+
+set -e
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "✗ docker not found on PATH"
+  exit 1
+fi
+
+# Ensure the web container is up.
+if [ -z "$(docker compose ps web --status running --quiet 2>/dev/null)" ]; then
+  echo "✗ web container is not running."
+  echo "  Start it with: cd web && docker compose up -d"
+  exit 1
+fi
+
+echo "→ pnpm typecheck (in web container)"
+docker compose exec -T web pnpm typecheck
+
+echo "→ pnpm lint (in web container)"
+docker compose exec -T web pnpm lint
+
+echo "✓ pre-push checks passed"
