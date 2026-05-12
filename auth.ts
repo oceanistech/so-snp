@@ -1,6 +1,5 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import EmailProvider from "next-auth/providers/nodemailer";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { z } from "zod";
@@ -8,16 +7,24 @@ import authConfig from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 
 /**
+ * Custom credentials-sign-in error for accounts that exist with a valid
+ * password but haven't completed email verification yet. NextAuth preserves
+ * `code` on the URL so the sign-in page can show a tailored message.
+ */
+class EmailNotVerifiedError extends CredentialsSignin {
+  override code = "EmailNotVerified";
+}
+
+/**
  * Auth.js (NextAuth v5) — full configuration.
  *
- * This module imports Prisma and nodemailer, so it MUST NOT be imported from
- * `middleware.ts` or any other Edge-runtime code. Middleware uses
- * `auth.config.ts` instead.
+ * This module imports Prisma so it MUST NOT be imported from `middleware.ts`
+ * or any other Edge-runtime code. Middleware uses `auth.config.ts` instead.
  *
  * - Prisma adapter persists Account / Session / VerificationToken / User.
- * - Credentials provider matches the seeded dev user (email + bcrypt password).
- * - Nodemailer/Email provider sends magic links via the same SMTP transport
- *   used by lib/mail.ts (Mailpit in local dev).
+ * - Credentials provider authenticates email + bcrypt password.
+ * - Sign-up email verification uses a separate flow (lib/verification.ts +
+ *   Mailgun HTTP API in lib/mail.ts), not Auth.js's EmailProvider.
  *
  * NOTE: Per platform-brd.md §4 we standardise on Auth.js. JWT/Passport-style
  * patterns are explicitly out of scope.
@@ -70,27 +77,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
 
+        // Block sign-in for unverified emails. Throwing a CredentialsSignin
+        // subclass preserves the `code` so the sign-in page can show the
+        // "please verify your email" message instead of generic invalid creds.
+        if (!user.emailVerified) {
+          throw new EmailNotVerifiedError();
+        }
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
         };
       },
-    }),
-    EmailProvider({
-      server: {
-        host: process.env.MAIL_HOST ?? "localhost",
-        port: Number(process.env.MAIL_PORT ?? 1025),
-        secure: process.env.MAIL_SECURE === "true",
-        auth:
-          process.env.MAIL_USER && process.env.MAIL_PASS
-            ? {
-                user: process.env.MAIL_USER,
-                pass: process.env.MAIL_PASS,
-              }
-            : undefined,
-      },
-      from: process.env.MAIL_FROM ?? "Signal S&P <no-reply@signalsp.local>",
     }),
   ],
 });

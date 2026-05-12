@@ -616,7 +616,9 @@ function EnvScoreChecks({
   defaults?: ReadonlyArray<"A" | "B" | "C" | "D" | "E">;
   includeE?: boolean;
 }) {
-  const grades = (includeE ? ["A", "B", "C", "D", "E"] : ["A", "B", "C", "D"]) as const;
+  const grades = includeE
+    ? (["A", "B", "C", "D", "E"] as const)
+    : (["A", "B", "C", "D"] as const);
   const styles: Record<string, string> = {
     A: "peer-checked:bg-signal-green/15 peer-checked:text-signal-green peer-checked:border-signal-green/30",
     B: "peer-checked:bg-primary/15 peer-checked:text-primary peer-checked:border-primary/30",

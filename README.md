@@ -20,7 +20,7 @@ Next.js 15 platform for the Signal S&P sale & purchase tooling. This is the
 | Styling | **Tailwind CSS 3** + **shadcn/ui** (no custom CSS, no inline styles, no hex literals in components) |
 | ORM | **Prisma 6** on **Postgres 16** |
 | Auth | **Auth.js v5** (NextAuth) — Credentials + Email magic link, Prisma adapter |
-| Mail | **Nodemailer** over SMTP — Mailpit in dev, Mailgun in prod |
+| Mail | **Mailgun HTTP API** via `mailgun.js` (`lib/mail.ts`). Configured with `MAILGUN_DOMAIN` + `MAILGUN_SECRET`. |
 | Runtime | Node 20 LTS |
 | Package manager | pnpm 9 |
 | Container | Docker Compose (`db`, `mail`, `web`) |
@@ -62,7 +62,8 @@ Then open:
 | URL | Service |
 |---|---|
 | <http://localhost:3000> | Web app |
-| <http://localhost:3000/sign-in> | Sign in (seeded user: `dev@signalsp.local` / `password`) |
+| <http://localhost:3000/sign-in> | Sign in (seeded user: `engineroom@oceanis.io` / `engineroom`) |
+| <http://localhost:3000/sign-up> | Sign up — name + email + password (requires email verification via link) |
 | <http://localhost:3000/api/health> | Health JSON (db + mail) |
 | <http://localhost:3000/dev/mail-test?to=you@example.com> | Send a test email through the SMTP transport |
 | <http://localhost:18025> | Mailpit web UI — all outbound dev emails land here |
@@ -112,10 +113,13 @@ See [`.env.example`](./.env.example) for the canonical list. Required at runtime
 
 | Var | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection string. |
+| `DATABASE_URL` | Postgres connection string used at runtime. In production points at the Supabase **transaction pooler** (port 6543). |
+| `DIRECT_URL` | Postgres connection string used by `prisma migrate`. In production points at the Supabase **direct connection** (port 5432). Locally can equal `DATABASE_URL`. |
 | `AUTH_SECRET` | Auth.js session secret. **Must** be generated with `openssl rand -base64 32`. |
 | `AUTH_URL` | Public URL of the app, used by Auth.js for callbacks. |
-| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM` | SMTP transport. |
+| `MAILGUN_DOMAIN`, `MAILGUN_SECRET` | Mailgun HTTP API config. Domain must be verified in Mailgun. |
+| `MAILGUN_REGION` | `us` (default) or `eu` for EU-region Mailgun accounts. |
+| `MAIL_FROM` | From address. Local part anything; domain must match the Mailgun-verified domain. |
 | `ENABLE_DEV_ROUTES` | When `true`, `/dev/mail-test` is reachable. **Always `false` in production.** |
 
 ---

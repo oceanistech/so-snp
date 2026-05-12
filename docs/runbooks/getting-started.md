@@ -75,10 +75,18 @@ The `pnpm db:seed` script creates one organisation and one OWNER user. Use them 
 | Field | Value |
 |---|---|
 | Org slug | `signal-sp-dev` |
-| Email | `dev@signalsp.local` |
-| Password | `password` |
+| Email | `engineroom@oceanis.io` |
+| Password | `engineroom` |
+
+Override the defaults at runtime via env vars:
+
+```bash
+SEED_USER_EMAIL=ja@oceanis.io SEED_USER_PASSWORD=somethingstronger pnpm db:seed
+```
 
 Re-running `pnpm db:seed` is idempotent — safe to call repeatedly.
+
+New users can also self-register at `/sign-up` (name + email + password). After sign-up the app sends a verification link by email **via Mailgun's HTTP API**; the user **cannot sign in until they click that link**. Local dev needs `MAILGUN_DOMAIN` + `MAILGUN_SECRET` set in `.env.local` — either a real domain or a Mailgun sandbox with authorized recipients.
 
 ## Verification checklist
 
@@ -86,7 +94,7 @@ After `docker compose up`, run through these in order. If any step fails, see Tr
 
 1. **Containers up.** `docker compose ps` shows `db`, `mail`, `web` all `running` and `db` `healthy`.
 2. **Migrations applied.** `docker compose exec web pnpm db:migrate --name init` (first run) or `pnpm db:migrate` (subsequent) ends with "Already in sync" or applies migrations cleanly.
-3. **Seed run.** `docker compose exec web pnpm db:seed` ends with `[seed] sign in at /sign-in with dev@signalsp.local / password`.
+3. **Seed run.** `docker compose exec web pnpm db:seed` ends with `[seed] sign in at /sign-in with engineroom@oceanis.io / engineroom`.
 4. **Health page.** `curl -s http://localhost:3000/api/health | jq` returns `"status": "ok"` with `db.ok: true` and `mail.ok: true`.
 5. **Mail smoke test.** `curl "http://localhost:3000/dev/mail-test?to=test@example.com"` returns `{"ok":true,...}` and the message appears in the Mailpit inbox at <http://localhost:18025>.
 6. **Sign in.** Open <http://localhost:3000/sign-in> and authenticate with the seeded credentials. You should land on `/`.

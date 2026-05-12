@@ -64,13 +64,20 @@ services:
       NODE_ENV: development
       APP_BASE_URL: http://localhost:3000
       DATABASE_URL: postgresql://snp:snp@db:5432/snp?schema=public
+      # Prisma requires DIRECT_URL for migrations. Locally we don't have a
+      # pooler, so it's the same URL as DATABASE_URL.
+      DIRECT_URL: postgresql://snp:snp@db:5432/snp?schema=public
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-me}
       AUTH_URL: http://localhost:3000
       AUTH_TRUST_HOST: "true"
-      MAIL_HOST: mail
-      MAIL_PORT: "1025"
-      MAIL_SECURE: "false"
-      MAIL_FROM: "Signal S&P <no-reply@signalsp.local>"
+      # Mail sends via Mailgun HTTP API in lib/mail.ts. Set MAILGUN_DOMAIN,
+      # MAILGUN_SECRET, MAILGUN_REGION, and MAIL_FROM in .env.local — they're
+      # picked up by Next.js's @next/env loader inside the container.
+      #
+      # We intentionally DON'T set them here as docker-compose env vars: doing
+      # that would set empty strings at the OS level, which blocks Next.js
+      # from loading the real values from .env.local (dotenv won't override
+      # already-set process.env entries).
       ENABLE_DEV_ROUTES: "true"
     ports:
       - "3000:3000"

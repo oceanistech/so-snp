@@ -708,7 +708,7 @@ function DemolitionsPanel() {
               {DEMO_BY_SEGMENT.map((r, i) => (
                 <tr key={`${r.type}-${i}`} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="px-4 py-2.5">
-                    <SegmentTag tag={r.type} label={DEMO_SEGMENT_LABELS[i]} />
+                    <SegmentTag tag={r.type} label={DEMO_SEGMENT_LABELS[i] ?? r.type} />
                   </td>
                   <td className="px-4 py-2.5 text-right font-bold tabular-nums">
                     {r.vessels}
