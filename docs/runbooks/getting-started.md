@@ -86,7 +86,7 @@ SEED_USER_EMAIL=ja@oceanis.io SEED_USER_PASSWORD=somethingstronger pnpm db:seed
 
 Re-running `pnpm db:seed` is idempotent — safe to call repeatedly.
 
-New users can also self-register at `/sign-up` (name + email + password). After sign-up the app sends a verification link by email; the user **cannot sign in until they click that link**. In local dev the email lands in Mailpit at <http://localhost:18025>.
+New users can also self-register at `/sign-up` (name + email + password). After sign-up the app sends a verification link by email **via Mailgun's HTTP API**; the user **cannot sign in until they click that link**. Local dev needs `MAILGUN_DOMAIN` + `MAILGUN_SECRET` set in `.env.local` — either a real domain or a Mailgun sandbox with authorized recipients.
 
 ## Verification checklist
 

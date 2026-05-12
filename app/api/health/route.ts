@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mailer } from "@/lib/mail";
+import { verifyMailer } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function GET() {
       await prisma.$queryRaw`SELECT 1`;
     }),
     timed(async () => {
-      await mailer().verify();
+      await verifyMailer();
     }),
   ]);
 
