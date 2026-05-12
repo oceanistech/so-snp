@@ -13,8 +13,8 @@ import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const DEV_EMAIL = "dev@signalsp.local";
-const DEV_PASSWORD = "password";
+const DEV_EMAIL = process.env.SEED_USER_EMAIL ?? "engineroom@oceanis.io";
+const DEV_PASSWORD = process.env.SEED_USER_PASSWORD ?? "engineroom";
 const DEV_ORG_SLUG = "signal-sp-dev";
 
 async function main() {
@@ -31,10 +31,10 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: DEV_EMAIL },
-    update: { passwordHash, name: "Dev User" },
+    update: { passwordHash, name: "Engine Room" },
     create: {
       email: DEV_EMAIL,
-      name: "Dev User",
+      name: "Engine Room",
       passwordHash,
       emailVerified: new Date(),
     },

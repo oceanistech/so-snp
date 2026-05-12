@@ -62,7 +62,8 @@ Then open:
 | URL | Service |
 |---|---|
 | <http://localhost:3000> | Web app |
-| <http://localhost:3000/sign-in> | Sign in (seeded user: `dev@signalsp.local` / `password`) |
+| <http://localhost:3000/sign-in> | Sign in (seeded user: `engineroom@oceanis.io` / `engineroom`) |
+| <http://localhost:3000/sign-up> | Sign up — name + email + password (requires email verification via link) |
 | <http://localhost:3000/api/health> | Health JSON (db + mail) |
 | <http://localhost:3000/dev/mail-test?to=you@example.com> | Send a test email through the SMTP transport |
 | <http://localhost:18025> | Mailpit web UI — all outbound dev emails land here |

@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/nodemailer";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -6,6 +6,15 @@ import { compare } from "bcryptjs";
 import { z } from "zod";
 import authConfig from "@/auth.config";
 import { prisma } from "@/lib/prisma";
+
+/**
+ * Custom credentials-sign-in error for accounts that exist with a valid
+ * password but haven't completed email verification yet. NextAuth preserves
+ * `code` on the URL so the sign-in page can show a tailored message.
+ */
+class EmailNotVerifiedError extends CredentialsSignin {
+  override code = "EmailNotVerified";
+}
 
 /**
  * Auth.js (NextAuth v5) — full configuration.
@@ -69,6 +78,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
+
+        // Block sign-in for unverified emails. Throwing a CredentialsSignin
+        // subclass preserves the `code` so the sign-in page can show the
+        // "please verify your email" message instead of generic invalid creds.
+        if (!user.emailVerified) {
+          throw new EmailNotVerifiedError();
+        }
 
         return {
           id: user.id,
