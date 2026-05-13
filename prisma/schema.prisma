@@ -1,43 +1,51 @@
-// Signal S&P — initial database schema.
+// Signal S&P — database schema.
 //
-// Covers the F1/F2/F3 baseline modules from platform-brd.md:
+// Covers:
 //   F1 Identity & Access      → User, Account, Session, VerificationToken
 //   F2 Org & Tenancy          → Org, Membership
 //   F3 Audit & Telemetry      → AuditLog
+//   M02/M03 Fleets & Vessels  → Fleet, Vessel, FleetVessel, VesselOwnershipHistory,
+//                               VesselCertificate (org-scoped, soft-deletable)
+//   Reference data            → Country, Port, VesselType (hierarchical),
+//                               Shipyard, ClassSociety, EngineMaker, EngineModel,
+//                               Counterparty (platform-global, seeded only)
+//   Signal Ocean integration  → VesselRegistryCache
+//   "Other" fallback          → PendingReferenceSuggestion
 //
-// Feature-module tables (vessels, loans, cash flows, fleets, etc.) will be
-// added per-module once their stories begin (see platform-brd.md §6).
+// Conventions (see web/docs/architecture/database.md):
+//   - Every user-data model uses (id, createdAt, updatedAt, deletedAt)
+//   - Org-scoped models include `orgId` and queries filter by it
+//   - Reference tables are platform-global (no orgId) and use isActive for
+//     soft deactivation rather than deletedAt
+//   - Money columns are Decimal(14,2); dimensions use Decimal(6,2)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  // Used by the running app for queries. In production this points at the
-  // Supabase **transaction pooler** (port 6543, ?pgbouncer=true).
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // Used by `prisma migrate` and other schema-introspection commands, which
-  // need a direct (non-pooled) connection. In production this points at the
-  // Supabase **direct connection** (port 5432). Locally with docker-compose
-  // it can point at the same URL as DATABASE_URL.
   directUrl = env("DIRECT_URL")
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // F2 — Organisation & tenancy
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 model Org {
-  id        String   @id @default(cuid())
-  slug      String   @unique
+  id        String    @id @default(cuid())
+  slug      String    @unique
   name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   memberships Membership[]
   auditLogs   AuditLog[]
+  fleets      Fleet[]
+  vessels     Vessel[]
+  counterparties Counterparty[]
 
   @@map("orgs")
 }
@@ -65,9 +73,9 @@ model Membership {
   @@map("memberships")
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // F1 — Identity & access (Auth.js Prisma adapter shape)
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 model User {
   id            String    @id @default(cuid())
@@ -84,6 +92,7 @@ model User {
   sessions    Session[]
   memberships Membership[]
   auditLogs   AuditLog[]
+  ownedFleets Fleet[] @relation("FleetOwner")
 
   @@map("users")
 }
@@ -130,9 +139,9 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // F3 — Audit & telemetry
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 model AuditLog {
   id        String   @id @default(cuid())
@@ -153,4 +162,430 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// =============================================================================
+// Reference data — platform-global, seeded only.
+//
+// Org admins cannot edit these. Each form provides an "Other" free-text
+// fallback that lands in `pending_reference_suggestions` for admin review.
+// =============================================================================
+
+model Country {
+  id          String  @id @default(cuid())
+  iso2        String  @unique     // "LR", "PA"
+  iso3        String  @unique     // "LBR", "PAN"
+  name        String  @unique     // "Liberia"
+  isFlagState Boolean @default(false)
+  flagEmoji   String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ports             Port[]
+  shipyards         Shipyard[]
+  counterparties    Counterparty[]
+  vesselsAsFlag     Vessel[] @relation("VesselFlag")
+
+  @@index([isFlagState])
+  @@map("countries")
+}
+
+model Port {
+  id        String  @id @default(cuid())
+  unlocode  String? @unique     // UN/LOCODE e.g. "LRMLW" — when known
+  name      String
+  countryId String
+  lat       Decimal? @db.Decimal(8, 5)
+  lng       Decimal? @db.Decimal(8, 5)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country Country  @relation(fields: [countryId], references: [id])
+  vessels Vessel[] @relation("VesselPortOfRegistry")
+
+  @@unique([name, countryId])
+  @@index([countryId])
+  @@map("ports")
+}
+
+model VesselType {
+  id         String  @id @default(cuid())
+  code       String  @unique          // "BULK", "BULK.PANAMAX"
+  name       String                   // "Bulk Carrier", "Panamax"
+  parentId   String?                  // null = top-level segment
+  shortLabel String?                  // "BULK", "TANKER", "CNTR" — for badges
+  colorHex   String?                  // optional badge tint
+  minDwt     Int?
+  maxDwt     Int?
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   VesselType?  @relation("VesselTypeTree", fields: [parentId], references: [id])
+  children VesselType[] @relation("VesselTypeTree")
+  vessels  Vessel[]
+
+  @@index([parentId])
+  @@map("vessel_types")
+}
+
+model Shipyard {
+  id        String  @id @default(cuid())
+  name      String
+  countryId String?
+  city      String?
+  isActive  Boolean @default(true)
+  notes     String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country Country? @relation(fields: [countryId], references: [id])
+  vessels Vessel[]
+
+  @@unique([name, countryId])
+  @@map("shipyards")
+}
+
+model ClassSociety {
+  id         String  @id @default(cuid())
+  code       String  @unique      // "DNV", "LR", "BV", "ABS", "NK", …
+  name       String  @unique
+  shortName  String?
+  iacsMember Boolean @default(true)
+  websiteUrl String?
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vessels Vessel[]
+
+  @@map("class_societies")
+}
+
+model EngineMaker {
+  id       String  @id @default(cuid())
+  name     String  @unique          // "MAN B&W", "Wärtsilä"
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  models EngineModel[]
+
+  @@map("engine_makers")
+}
+
+model EngineModel {
+  id       String  @id @default(cuid())
+  makerId  String
+  name     String                    // "6G60ME-C9.5"
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  maker   EngineMaker @relation(fields: [makerId], references: [id])
+  vessels Vessel[]
+
+  @@unique([makerId, name])
+  @@map("engine_models")
+}
+
+enum CounterpartyType {
+  CHARTERER
+  BUYER
+  SELLER
+  LENDER
+  BROKER
+  MANAGER
+  OPERATOR
+}
+
+model Counterparty {
+  id        String           @id @default(cuid())
+  orgId     String?                                  // null = global, seeded
+  name      String
+  type      CounterpartyType @default(CHARTERER)
+  countryId String?
+  isActive  Boolean          @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org     Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  country Country? @relation(fields: [countryId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([type])
+  @@map("counterparties")
+}
+
+// =============================================================================
+// Pending "Other" suggestions — written when a user picks "Other" in a
+// reference field and types a free-text value. Reviewed by an admin who can
+// merge or reject the suggestion.
+// =============================================================================
+
+enum PendingReferenceTable {
+  PORT
+  SHIPYARD
+  CLASS_SOCIETY
+  ENGINE_MAKER
+  ENGINE_MODEL
+  COUNTERPARTY
+}
+
+enum PendingReferenceStatus {
+  PENDING
+  MERGED
+  REJECTED
+}
+
+model PendingReferenceSuggestion {
+  id          String                 @id @default(cuid())
+  table       PendingReferenceTable
+  suggestion  String                                  // free-text value the user entered
+  context     Json?                                   // any extra context (countryId, etc.)
+  status      PendingReferenceStatus @default(PENDING)
+  orgId       String?                                 // which org suggested it
+  suggestedBy String?                                 // userId
+  reviewedBy  String?                                 // userId
+  reviewedAt  DateTime?
+  mergedIntoId String?                                // FK target id once merged
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, table])
+  @@map("pending_reference_suggestions")
+}
+
+// =============================================================================
+// M02 / M03 — Fleets & Vessels
+// =============================================================================
+
+enum FleetVisibility {
+  PRIVATE
+  TEAM
+  READ_ONLY
+}
+
+enum VesselLifecycleStatus {
+  ACTIVE
+  LAID_UP
+  DRYDOCK
+  SOLD
+  SCRAPPED
+}
+
+enum EmploymentStatus {
+  TC
+  SPOT
+  IDLE
+  DRYDOCK
+  UNDER_REPAIR
+}
+
+enum EnvScore {
+  A
+  B
+  C
+  D
+  E
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  JPY
+  CNY
+}
+
+model Fleet {
+  id          String          @id @default(cuid())
+  orgId       String
+  slug        String                                   // URL slug, unique per org
+  name        String
+  description String?         @db.Text
+  type        String          @default("Mixed")        // "Mixed" / "Bulk Carriers" / …
+  currency    Currency        @default(USD)
+  visibility  FleetVisibility @default(PRIVATE)
+  tag         String?
+  ownerUserId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  org          Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ownerUser    User?         @relation("FleetOwner", fields: [ownerUserId], references: [id])
+  fleetVessels FleetVessel[]
+
+  @@unique([orgId, slug])
+  @@unique([orgId, name])      // case-insensitive enforcement at service layer
+  @@index([orgId, deletedAt])
+  @@map("fleets")
+}
+
+model Vessel {
+  id                String @id @default(cuid())
+  orgId             String
+
+  // Identification
+  imo               String
+  name              String
+  mmsi              String?
+  callSign          String?
+
+  // References (FKs to reference tables)
+  flagCountryId     String?
+  portOfRegistryId  String?
+  vesselTypeId      String
+  shipyardId        String?
+  classSocietyId    String?
+  engineModelId     String?
+
+  // "Other" free-text fallbacks (used when reference FK is null and user picked "Other")
+  flagOther          String?
+  portOfRegistryOther String?
+  shipyardOther     String?
+  classSocietyOther String?
+  engineModelOther  String?
+
+  // Specifications
+  yearBuilt         Int
+  nextSpecialSurvey DateTime?
+  dwt               Int
+  grt               Int?
+  nrt               Int?
+  loaM              Decimal? @db.Decimal(6, 2)
+  beamM             Decimal? @db.Decimal(6, 2)
+  draftM            Decimal? @db.Decimal(6, 2)
+  serviceSpeedKn    Decimal? @db.Decimal(4, 2)
+
+  // Commercial / financial snapshot
+  acquisitionCost  Decimal?  @db.Decimal(14, 2)
+  acquisitionDate  DateTime?
+  currentFmv       Decimal?  @db.Decimal(14, 2)
+  outstandingLoan  Decimal?  @db.Decimal(14, 2)
+  currency         Currency  @default(USD)
+
+  // Status & ESG snapshot
+  lifecycleStatus  VesselLifecycleStatus @default(ACTIVE)
+  employmentStatus EmploymentStatus      @default(IDLE)
+  envScore         EnvScore?
+
+  // Misc
+  heroImageUrl String?
+  notes        String? @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+
+  org              Org                       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  flagCountry      Country?                  @relation("VesselFlag", fields: [flagCountryId], references: [id])
+  portOfRegistry   Port?                     @relation("VesselPortOfRegistry", fields: [portOfRegistryId], references: [id])
+  vesselType       VesselType                @relation(fields: [vesselTypeId], references: [id])
+  shipyard         Shipyard?                 @relation(fields: [shipyardId], references: [id])
+  classSociety     ClassSociety?             @relation(fields: [classSocietyId], references: [id])
+  engineModel      EngineModel?              @relation(fields: [engineModelId], references: [id])
+  fleetVessels     FleetVessel[]
+  ownershipHistory VesselOwnershipHistory[]
+  certificates     VesselCertificate[]
+
+  // (orgId, imo, name) unique → same IMO with different names is allowed
+  // per ADR-0002 (an org can track multiple records for one hull, e.g.
+  // ex-name history or competitor vessels under their own labels).
+  @@unique([orgId, imo, name])
+  @@index([orgId, imo])
+  @@index([orgId, vesselTypeId])
+  @@index([orgId, deletedAt])
+  @@map("vessels")
+}
+
+model FleetVessel {
+  id        String    @id @default(cuid())
+  fleetId   String
+  vesselId  String
+  addedAt   DateTime  @default(now())
+  addedBy   String?
+
+  // Soft delete with Restore action — when a vessel is removed from a fleet
+  // we keep the row so reporting can ask "vessels that have ever been in
+  // Fleet X". Hard delete is gated by a separate UI action with modal confirm.
+  deletedAt DateTime?
+  deletedBy String?
+
+  fleet  Fleet  @relation(fields: [fleetId], references: [id], onDelete: Cascade)
+  vessel Vessel @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+
+  @@unique([fleetId, vesselId])
+  @@index([vesselId])
+  @@index([fleetId, deletedAt])
+  @@map("fleet_vessels")
+}
+
+model VesselOwnershipHistory {
+  id        String   @id @default(cuid())
+  vesselId  String
+  ownerName String
+  fromDate  DateTime?
+  toDate    DateTime?              // null = "Present"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vessel Vessel @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+
+  @@index([vesselId])
+  @@map("vessel_ownership_history")
+}
+
+model VesselCertificate {
+  id        String    @id @default(cuid())
+  vesselId  String
+  label     String                              // "Safety Management Cert"
+  issuer    String?
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vessel Vessel @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+
+  @@index([vesselId, expiresAt])
+  @@map("vessel_certificates")
+}
+
+// =============================================================================
+// Signal Ocean integration — registry cache (ADR-0004)
+//
+// Keyed by IMO globally (Signal Ocean's IMO is the global maritime identifier).
+// Refreshed on `UpdatedDate` change. TTL configurable via env
+// SIGNAL_OCEAN_LOOKUP_CACHE_DAYS (default 7).
+// =============================================================================
+
+model VesselRegistryCache {
+  id              String   @id @default(cuid())
+  imo             String   @unique
+  source          String   @default("SIGNAL_OCEAN")
+  payload         Json                                  // raw Signal Ocean response
+  normalized      Json                                  // mapped to our form shape
+  fetchedAt       DateTime @default(now())
+  sourceUpdatedAt DateTime?
+  hits            Int      @default(0)
+
+  @@index([fetchedAt])
+  @@map("vessel_registry_cache")
 }

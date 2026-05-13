@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADRs)
 
 One file per decision. Filename pattern: `NNNN-kebab-title.md`, e.g.
-`0001-use-prisma-for-orm.md`.
+`0001-prisma-postgres.md`.
 
 ## Template
 
@@ -29,4 +29,8 @@ What else was on the table, and why was it rejected?
 
 ## Index
 
-_(empty — populate as decisions are made.)_
+| ADR | Title | Status |
+|---|---|---|
+| [0001](./0001-prisma-postgres.md) | Prisma + PostgreSQL for application persistence | Accepted |
+| [0002](./0002-imo-not-globally-unique.md) | Vessel IMO is not globally unique within an org | Accepted |
+| [0003](./0003-reference-data-strategy.md) | Platform-global reference data with "Other" free-text fallback | Accepted |

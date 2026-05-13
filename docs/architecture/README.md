@@ -7,10 +7,11 @@ cross-cutting engineering concerns.
 
 | Doc | Scope |
 |---|---|
+| [`database.md`](./database.md) | Schema conventions, ER diagrams, soft-delete pattern, migration workflow |
 | [`testing-strategy.md`](./testing-strategy.md) | How automated testing is organised (Vitest, Playwright, MSW, CI) |
 
 _(more docs added as the system grows — fleets & vessels module,
-database overview, Signal Ocean integration, URL conventions.)_
+Signal Ocean integration, URL conventions.)_
 
 ## Conventions
 
