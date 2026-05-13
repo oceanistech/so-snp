@@ -12,16 +12,16 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -z "$(docker compose ps web --status running --quiet 2>/dev/null)" ]; then
-  echo "✗ web container is not running."
-  echo "  Start it with: cd web && docker compose up -d"
+if [ -z "$(docker compose ps so-snp-web --status running --quiet 2>/dev/null)" ]; then
+  echo "✗ so-snp-web container is not running."
+  echo "  Start it with: docker compose up -d"
   exit 1
 fi
 
-echo "→ pnpm typecheck (in web container)"
-docker compose exec -T web pnpm typecheck
+echo "→ pnpm typecheck (in so-snp-web container)"
+docker compose exec -T so-snp-web pnpm typecheck
 
-echo "→ pnpm lint (in web container)"
-docker compose exec -T web pnpm lint
+echo "→ pnpm lint (in so-snp-web container)"
+docker compose exec -T so-snp-web pnpm lint
 
 echo "✓ pre-commit checks passed"

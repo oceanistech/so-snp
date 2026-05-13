@@ -1,11 +1,14 @@
 # Signal S&P — local development stack.
 # Brings up: Postgres 16, Mailpit (SMTP catcher), and the Next.js web app.
 #
+# Service names are prefixed `so-snp-*` (Signal Ocean / S&P) so containers
+# are easy to recognise in `docker ps` alongside other local stacks.
+#
 # Quickstart (Compose V2 — `docker compose`, with a space):
 #   cp .env.example .env.local           # then edit AUTH_SECRET
 #   docker compose up --build
-#   docker compose exec web pnpm db:migrate
-#   docker compose exec web pnpm db:seed
+#   docker compose exec so-snp-web pnpm db:migrate
+#   docker compose exec so-snp-web pnpm db:seed
 #
 # UIs (host-side ports — remapped to avoid collisions):
 #   Web   http://localhost:3000
@@ -15,6 +18,7 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: so-snp-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: snp
@@ -35,6 +39,7 @@ services:
 
   mail:
     image: axllent/mailpit:latest
+    container_name: so-snp-mail
     restart: unless-stopped
     ports:
       # Host ports remapped to avoid collisions; container-side stays default.
@@ -50,10 +55,11 @@ services:
       timeout: 3s
       retries: 5
 
-  web:
+  so-snp-web:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    container_name: so-snp-web
     restart: unless-stopped
     depends_on:
       db:

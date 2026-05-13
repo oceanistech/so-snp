@@ -23,7 +23,7 @@ Next.js 15 platform for the Signal S&P sale & purchase tooling. This is the
 | Mail | **Mailgun HTTP API** via `mailgun.js` (`lib/mail.ts`). Configured with `MAILGUN_DOMAIN` + `MAILGUN_SECRET`. |
 | Runtime | Node 20 LTS |
 | Package manager | pnpm 9 |
-| Container | Docker Compose (`db`, `mail`, `web`) |
+| Container | Docker Compose (`so-snp-db`, `so-snp-mail`, `so-snp-web`) |
 
 See `docs/brd/platform-brd.md` §4 Technology Stack for the binding rules.
 
@@ -53,8 +53,8 @@ cp .env.example .env.local
 
 docker compose up --build
 # In a second terminal — name the FIRST migration `init`:
-docker compose exec web pnpm db:migrate --name init
-docker compose exec web pnpm db:seed
+docker compose exec so-snp-web pnpm db:migrate --name init
+docker compose exec so-snp-web pnpm db:seed
 ```
 
 Then open:

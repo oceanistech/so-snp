@@ -275,7 +275,7 @@ These rules supersede prototype practice. They exist so that future modules stay
 **Container-only tooling.** All `pnpm`, `node`, `prisma`, and `playwright` commands run inside the dev container (built from `Dockerfile.dev`). The host machine doesn't need a working `node_modules` for builds or tests. The canonical command form is:
 
 ```bash
-docker compose exec web pnpm <script>
+docker compose exec so-snp-web pnpm <script>
 ```
 
 Rationale: the container runs Linux x86_64 with a known Node 22 + pnpm 9.15.0 toolchain; the host (typically macOS arm64) hits inconsistent native-binary issues with optional dependencies (Rollup, esbuild, swc). Keeping all build/test commands in one runtime eliminates "works on my machine" drift, matches CI exactly, and keeps the husky pre-commit / pre-push hooks consistent.

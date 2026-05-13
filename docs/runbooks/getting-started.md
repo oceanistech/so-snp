@@ -6,12 +6,12 @@ How to bring up Signal S&P on your machine, what each service is for, and how to
 
 > **All commands in this repo's docs run from the `web/` directory.** Shell prompts shown below assume you're already there. Don't prefix commands with `cd web`.
 
-> **All `pnpm` commands run inside the dev container, not on the host.** The host doesn't need a working `node_modules`. The canonical form is `docker compose exec web pnpm <command>`. This avoids macOS-vs-Linux native-binary problems (the Rollup `darwin-arm64` optional-dependency bug being the usual culprit) and keeps every developer + CI on the same runtime.
+> **All `pnpm` commands run inside the dev container, not on the host.** The host doesn't need a working `node_modules`. The canonical form is `docker compose exec so-snp-web pnpm <command>`. This avoids macOS-vs-Linux native-binary problems (the Rollup `darwin-arm64` optional-dependency bug being the usual culprit) and keeps every developer + CI on the same runtime.
 
 Recommended shell alias:
 
 ```bash
-alias dce='docker compose exec web pnpm'
+alias dce='docker compose exec so-snp-web pnpm'
 # then `dce test`, `dce add zod`, `dce db:migrate`, etc.
 ```
 
@@ -46,8 +46,8 @@ docker compose up --build
 
 # In a second terminal, migrate and seed.
 # Name the FIRST migration `init`; later migrations can be auto-named.
-docker compose exec web pnpm db:migrate --name init
-docker compose exec web pnpm db:seed
+docker compose exec so-snp-web pnpm db:migrate --name init
+docker compose exec so-snp-web pnpm db:seed
 ```
 
 That's it — the seed creates the dev org and a sign-in user.
@@ -72,7 +72,7 @@ pnpm install --ignore-scripts
 Then re-sync the container so it matches the lockfile your host produced:
 
 ```bash
-docker compose exec web pnpm install
+docker compose exec so-snp-web pnpm install
 ```
 
 VS Code "Dev Containers" extension is another way to get IDE features without a host install — it opens the editor inside the container directly.
@@ -114,9 +114,9 @@ New users can also self-register at `/sign-up` (name + email + password). After 
 
 After `docker compose up`, run through these in order. If any step fails, see Troubleshooting below.
 
-1. **Containers up.** `docker compose ps` shows `db`, `mail`, `web` all `running` and `db` `healthy`.
-2. **Migrations applied.** `docker compose exec web pnpm db:migrate --name init` (first run) or `pnpm db:migrate` (subsequent) ends with "Already in sync" or applies migrations cleanly.
-3. **Seed run.** `docker compose exec web pnpm db:seed` ends with `[seed] sign in at /sign-in with engineroom@oceanis.io / engineroom`.
+1. **Containers up.** `docker compose ps` shows `so-snp-db`, `so-snp-mail`, `so-snp-web` all `running` and `so-snp-db` `healthy`.
+2. **Migrations applied.** `docker compose exec so-snp-web pnpm db:migrate --name init` (first run) or `pnpm db:migrate` (subsequent) ends with "Already in sync" or applies migrations cleanly.
+3. **Seed run.** `docker compose exec so-snp-web pnpm db:seed` ends with `[seed] sign in at /sign-in with engineroom@oceanis.io / engineroom`.
 4. **Health page.** `curl -s http://localhost:3000/api/health | jq` returns `"status": "ok"` with `db.ok: true` and `mail.ok: true`.
 5. **Mail smoke test.** `curl "http://localhost:3000/dev/mail-test?to=test@example.com"` returns `{"ok":true,...}` and the message appears in the Mailpit inbox at <http://localhost:18025>.
 6. **Sign in.** Open <http://localhost:3000/sign-in> and authenticate with the seeded credentials. You should land on `/`.
@@ -124,22 +124,22 @@ After `docker compose up`, run through these in order. If any step fails, see Tr
 
 ## Common scripts
 
-Every script below runs in the container. With the `dce` alias above, replace `docker compose exec web pnpm` with `dce`.
+Every script below runs in the container. With the `dce` alias above, replace `docker compose exec so-snp-web pnpm` with `dce`.
 
 | Script | What it does |
 |---|---|
-| `docker compose exec web pnpm dev` | Next dev server on `:3000` (already running via `docker compose up`). |
-| `docker compose exec web pnpm typecheck` | `tsc --noEmit` over the project. |
-| `docker compose exec web pnpm lint` | ESLint via the flat config. |
-| `docker compose exec web pnpm test` | Vitest unit + integration tests. |
-| `docker compose exec web pnpm test:watch` | Vitest in watch mode. |
-| `docker compose exec web pnpm test:coverage` | Vitest + V8 coverage, writes `./coverage/`. |
-| `docker compose exec web pnpm test:e2e` | Playwright end-to-end tests (requires Playwright deps — currently CI-only). |
-| `docker compose exec web pnpm db:generate` | Regenerate the Prisma client. |
-| `docker compose exec web pnpm db:migrate` | `prisma migrate dev` — creates a new migration if the schema changed. |
-| `docker compose exec web pnpm db:reset` | Drops and recreates the database, then re-seeds. **Destructive.** |
-| `docker compose exec web pnpm db:seed` | Idempotent seed. |
-| `docker compose exec web pnpm db:studio` | Prisma Studio at `:5555` (needs the port mapped in compose). |
+| `docker compose exec so-snp-web pnpm dev` | Next dev server on `:3000` (already running via `docker compose up`). |
+| `docker compose exec so-snp-web pnpm typecheck` | `tsc --noEmit` over the project. |
+| `docker compose exec so-snp-web pnpm lint` | ESLint via the flat config. |
+| `docker compose exec so-snp-web pnpm test` | Vitest unit + integration tests. |
+| `docker compose exec so-snp-web pnpm test:watch` | Vitest in watch mode. |
+| `docker compose exec so-snp-web pnpm test:coverage` | Vitest + V8 coverage, writes `./coverage/`. |
+| `docker compose exec so-snp-web pnpm test:e2e` | Playwright end-to-end tests (requires Playwright deps — currently CI-only). |
+| `docker compose exec so-snp-web pnpm db:generate` | Regenerate the Prisma client. |
+| `docker compose exec so-snp-web pnpm db:migrate` | `prisma migrate dev` — creates a new migration if the schema changed. |
+| `docker compose exec so-snp-web pnpm db:reset` | Drops and recreates the database, then re-seeds. **Destructive.** |
+| `docker compose exec so-snp-web pnpm db:seed` | Idempotent seed. |
+| `docker compose exec so-snp-web pnpm db:studio` | Prisma Studio at `:5555` (needs the port mapped in compose). |
 
 ## Troubleshooting
 
@@ -168,8 +168,8 @@ Middleware imported nodemailer transitively. Auth.js's split-config pattern fixe
 If you hit this after editing auth files, check that `middleware.ts` imports `@/auth.config` and not `@/auth`. Then clear the build cache:
 
 ```bash
-docker compose exec web rm -rf .next .turbo
-docker compose restart web
+docker compose exec so-snp-web rm -rf .next .turbo
+docker compose restart so-snp-web
 ```
 
 ### `CallbackRouteError` when signing in with credentials
@@ -178,7 +178,7 @@ Two known causes:
 1. **You used `session: { strategy: "database" }`** — Auth.js v5's Credentials provider only supports JWT sessions. The shipped `auth.ts` already uses `strategy: "jwt"`. If you changed it, change it back.
 2. **The runtime database is different from the one seed wrote to.** See the next entry below — it's almost always Next.js's `.env.local` overriding the compose `environment:` block with a host-targeted URL.
 
-The actual underlying error is in `docker compose logs web` — `CallbackRouteError` is just the wrapper.
+The actual underlying error is in `docker compose logs so-snp-web` — `CallbackRouteError` is just the wrapper.
 
 ### Sign-in fails with `The table public.users does not exist` (but seed succeeded)
 The compose `environment:` block sets `DATABASE_URL=…@db:5432/snp` for inside the container, **but Next.js loads `.env.local` and overrides it**. Since `.env.local` is bind-mounted from the host into `/app/`, Next picks up your host-targeted URL (`localhost:55432`) and the runtime hits a different db than seed/migrate did.
@@ -199,7 +199,7 @@ MAIL_HOST=localhost
 MAIL_PORT=11025
 ```
 
-After editing, restart the web container so Next.js re-loads env: `docker compose restart web`.
+After editing, restart the web container so Next.js re-loads env: `docker compose restart so-snp-web`.
 
 ### `Bind for 0.0.0.0:5432 failed: port is already allocated`
 Another Postgres is running on your host. Find and stop it:
@@ -263,7 +263,7 @@ pnpm install
 If you need to install inside the container, pass HOME explicitly:
 
 ```bash
-docker compose exec -e HOME=/tmp web pnpm install
+docker compose exec -e HOME=/tmp so-snp-web pnpm install
 ```
 
 ### `Stale node_modules / EACCES errors`
@@ -278,8 +278,8 @@ docker compose down -v          # stops services, removes volumes (⚠️ wipes 
 rm -rf node_modules .next       # purge build artefacts
 pnpm install
 docker compose up --build
-docker compose exec web pnpm db:migrate
-docker compose exec web pnpm db:seed
+docker compose exec so-snp-web pnpm db:migrate
+docker compose exec so-snp-web pnpm db:seed
 ```
 
 ## See also
