@@ -2,30 +2,43 @@
 
 How to bring up Signal S&P on your machine, what each service is for, and how to check it's healthy.
 
+## Working directory and command convention
+
+> **All commands in this repo's docs run from the `web/` directory.** Shell prompts shown below assume you're already there. Don't prefix commands with `cd web`.
+
+> **All `pnpm` commands run inside the dev container, not on the host.** The host doesn't need a working `node_modules`. The canonical form is `docker compose exec web pnpm <command>`. This avoids macOS-vs-Linux native-binary problems (the Rollup `darwin-arm64` optional-dependency bug being the usual culprit) and keeps every developer + CI on the same runtime.
+
+Recommended shell alias:
+
+```bash
+alias dce='docker compose exec web pnpm'
+# then `dce test`, `dce add zod`, `dce db:migrate`, etc.
+```
+
+Husky pre-commit / pre-push hooks already exec inside the container, so this convention matches what runs at commit time.
+
 ## Prerequisites
 
 | Tool | Version | Notes |
 |---|---|---|
-| Node.js | 20 LTS | Pinned in `.nvmrc`. Use `nvm use` from the `web/` directory. |
-| pnpm | 9.x | `corepack enable && corepack prepare pnpm@9.15.0 --activate`. |
-| Docker Desktop | recent | Compose V2 plugin is required (i.e. the `docker compose` command, with a space — not the legacy `docker-compose` binary). |
+| Docker Desktop | recent | Compose V2 plugin is required (the `docker compose` command, with a space — not the legacy `docker-compose` binary). Provides Node, pnpm, Postgres, and Mailpit. |
 | OpenSSL | any | For generating `AUTH_SECRET`: `openssl rand -base64 32`. |
+| Node.js (optional) | 22 (per `.nvmrc`) | Only needed if you want host-side IDE autocomplete or to run Playwright locally. Not used for builds. |
+| pnpm (optional) | 9.x via Corepack | Only needed if you install on the host for IDE support. Activate with `corepack enable`. |
 
 ## First-run cleanup
 
-The scaffold ships with two harmless leftover artefacts from the build sandbox. Delete them before your first install:
+The scaffold occasionally leaves a `_tmp_*` artefact from the build sandbox. Safe to remove:
 
 ```bash
-cd web
-rm -rf node_modules _tmp_*
+rm -rf _tmp_*
 ```
 
-## Bring-up — full stack in Docker
+## Bring-up — full stack in Docker (canonical)
 
 ```bash
-cd web
 cp .env.example .env.local
-# Generate a real secret and paste it in:
+# Generate a real secret and paste it into .env.local:
 openssl rand -base64 32
 
 # Start db + mail + web
@@ -39,21 +52,30 @@ docker compose exec web pnpm db:seed
 
 That's it — the seed creates the dev org and a sign-in user.
 
-## Bring-up — host pnpm + containerised infra only
+## Optional — install on host for IDE autocomplete
 
-If you want hot-reload speed and only need Postgres + Mailpit in containers:
+The host doesn't need `node_modules` to build or test, but your IDE (VS Code, JetBrains) wants one to resolve imports natively. If you want that:
 
 ```bash
-cd web
-cp .env.example .env.local
-
-docker compose up -d db mail
-
-pnpm install
-pnpm db:migrate --name init   # first time only
-pnpm db:seed
-pnpm dev
+corepack enable                 # one-time
+nvm use                         # picks Node 22 from .nvmrc
+pnpm install --ignore-scripts   # skips postinstall to avoid native-dep races
 ```
+
+If `pnpm install` fails with a Rollup `darwin-arm64` error on Apple Silicon, the safest recovery is:
+
+```bash
+rm -rf node_modules pnpm-lock.yaml.bak
+pnpm install --ignore-scripts
+```
+
+Then re-sync the container so it matches the lockfile your host produced:
+
+```bash
+docker compose exec web pnpm install
+```
+
+VS Code "Dev Containers" extension is another way to get IDE features without a host install — it opens the editor inside the container directly.
 
 ## Service map
 
@@ -102,18 +124,22 @@ After `docker compose up`, run through these in order. If any step fails, see Tr
 
 ## Common scripts
 
-Run from `web/` (host) or via `docker compose exec web pnpm <script>` (containerised):
+Every script below runs in the container. With the `dce` alias above, replace `docker compose exec web pnpm` with `dce`.
 
 | Script | What it does |
 |---|---|
-| `pnpm dev` | Next dev server on `:3000`. |
-| `pnpm typecheck` | `tsc --noEmit` over the project. |
-| `pnpm lint` | ESLint via `next lint`. |
-| `pnpm db:generate` | Regenerate the Prisma client. |
-| `pnpm db:migrate` | `prisma migrate dev` — creates a new migration if the schema changed. |
-| `pnpm db:reset` | Drops and recreates the database, then re-seeds. **Destructive.** |
-| `pnpm db:seed` | Idempotent seed. |
-| `pnpm db:studio` | Prisma Studio at `:5555`. |
+| `docker compose exec web pnpm dev` | Next dev server on `:3000` (already running via `docker compose up`). |
+| `docker compose exec web pnpm typecheck` | `tsc --noEmit` over the project. |
+| `docker compose exec web pnpm lint` | ESLint via the flat config. |
+| `docker compose exec web pnpm test` | Vitest unit + integration tests. |
+| `docker compose exec web pnpm test:watch` | Vitest in watch mode. |
+| `docker compose exec web pnpm test:coverage` | Vitest + V8 coverage, writes `./coverage/`. |
+| `docker compose exec web pnpm test:e2e` | Playwright end-to-end tests (requires Playwright deps — currently CI-only). |
+| `docker compose exec web pnpm db:generate` | Regenerate the Prisma client. |
+| `docker compose exec web pnpm db:migrate` | `prisma migrate dev` — creates a new migration if the schema changed. |
+| `docker compose exec web pnpm db:reset` | Drops and recreates the database, then re-seeds. **Destructive.** |
+| `docker compose exec web pnpm db:seed` | Idempotent seed. |
+| `docker compose exec web pnpm db:studio` | Prisma Studio at `:5555` (needs the port mapped in compose). |
 
 ## Troubleshooting
 

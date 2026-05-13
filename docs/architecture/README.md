@@ -1,10 +1,16 @@
 # Architecture
 
-Component diagrams, request-flow walkthroughs, and deployment topology.
+Component diagrams, request-flow walkthroughs, deployment topology, and
+cross-cutting engineering concerns.
 
 ## Index
 
-_(empty — populate as the system grows.)_
+| Doc | Scope |
+|---|---|
+| [`testing-strategy.md`](./testing-strategy.md) | How automated testing is organised (Vitest, Playwright, MSW, CI) |
+
+_(more docs added as the system grows — fleets & vessels module,
+database overview, Signal Ocean integration, URL conventions.)_
 
 ## Conventions
 

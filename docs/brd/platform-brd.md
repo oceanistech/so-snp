@@ -268,7 +268,41 @@ These rules supersede prototype practice. They exist so that future modules stay
 - Renovate or Dependabot raises monthly upgrade PRs; auto-merge for green patch updates only.
 - A platform-BRD entry must accompany any major-version upgrade that affects public APIs (Next.js, Prisma, Tailwind, shadcn).
 
-### 4.6 Decision Log
+### 4.6 Development Workflow
+
+**Working directory.** `web/` is the project root for all development commands. Every shell example in this BRD and the runbooks assumes the current working directory is `web/`.
+
+**Container-only tooling.** All `pnpm`, `node`, `prisma`, and `playwright` commands run inside the dev container (built from `Dockerfile.dev`). The host machine doesn't need a working `node_modules` for builds or tests. The canonical command form is:
+
+```bash
+docker compose exec web pnpm <script>
+```
+
+Rationale: the container runs Linux x86_64 with a known Node 22 + pnpm 9.15.0 toolchain; the host (typically macOS arm64) hits inconsistent native-binary issues with optional dependencies (Rollup, esbuild, swc). Keeping all build/test commands in one runtime eliminates "works on my machine" drift, matches CI exactly, and keeps the husky pre-commit / pre-push hooks consistent.
+
+The host install is supported only for IDE autocomplete and is documented as optional in `web/docs/runbooks/getting-started.md`.
+
+**Testing toolchain.**
+
+| Tool | Purpose | Where it runs |
+|---|---|---|
+| Vitest | Unit + integration tests, RTL component tests | Dev container |
+| @testing-library/react | DOM testing for React components | Dev container |
+| MSW | Mocking external APIs (Signal Ocean) | Dev container |
+| Playwright | End-to-end browser tests | CI; locally only when Playwright deps are baked into the image |
+| GitHub Actions | CI pipeline running typecheck, lint, Vitest, Playwright | CI |
+
+See `web/docs/architecture/testing-strategy.md` for the full strategy.
+
+**Commit message convention.** Every commit on a feature branch carries the Jira ticket ID as a prefix:
+
+```
+OT-NNN - <single line, imperative, ≤72 chars>
+```
+
+This ties every change back to its tracker entry. Use the active branch's ticket ID (e.g. `OT-175` for `feature/OT-175-fleets-and-vessels`).
+
+### 4.7 Decision Log
 
 When the platform stack changes, append an entry here with date, decision, rationale, and the PR or ADR link. Foundational stack choices that need ADRs in `docs/BRD/` ride alongside this section.
 
