@@ -1,15 +1,21 @@
 /**
  * Seed script for Signal S&P.
  *
- * Creates one demo organisation and one OWNER user with a known dev password
- * so the credentials provider on /sign-in works out of the box.
+ * Order of operations:
+ *   1. Dev organisation + OWNER user (so /sign-in works out of the box).
+ *   2. Platform-global reference data (countries, ports, vessel types,
+ *      shipyards, class societies, engine makers/models, counterparties).
+ *      See ADR-0003.
+ *   3. Demo fleets and vessels under the dev org.
+ *
+ * Idempotent — safe to run repeatedly. Re-running won't duplicate rows.
  *
  * Run with:  pnpm db:seed
- *
- * Idempotent — safe to run repeatedly.
  */
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { seedReferenceData } from "./seed/reference";
+import { seedDemoFleetsAndVessels } from "./seed/demo";
 
 const prisma = new PrismaClient();
 
@@ -20,6 +26,7 @@ const DEV_ORG_SLUG = "signal-sp-dev";
 async function main() {
   console.log("[seed] connecting…");
 
+  // 1. Dev org + OWNER user
   const passwordHash = await hash(DEV_PASSWORD, 10);
 
   const org = await prisma.org.upsert({
@@ -47,6 +54,22 @@ async function main() {
     create: { orgId: org.id, userId: user.id, role: "OWNER" },
   });
   console.log(`[seed] membership ${user.email} -> OWNER of ${org.slug}`);
+
+  // 2. Reference data
+  const refCounts = await seedReferenceData(prisma);
+  console.log(
+    `[seed] reference ${refCounts.countries} countries · ${refCounts.ports} ports · ` +
+      `${refCounts.vesselTypes} vessel types · ${refCounts.shipyards} shipyards · ` +
+      `${refCounts.classSocieties} class societies · ${refCounts.engineMakers} engine makers / ${refCounts.engineModels} models · ` +
+      `${refCounts.counterparties} counterparties`,
+  );
+
+  // 3. Demo fleets + vessels
+  const demoCounts = await seedDemoFleetsAndVessels(prisma, org.id, user.id);
+  console.log(
+    `[seed] demo      ${demoCounts.fleets} fleets · ${demoCounts.vessels} vessels ` +
+      `(${demoCounts.assignedToFleet} in fleets, ${demoCounts.unassigned} unassigned)`,
+  );
 
   console.log("[seed] done.");
   console.log(`[seed] sign in at /sign-in with ${DEV_EMAIL} / ${DEV_PASSWORD}`);

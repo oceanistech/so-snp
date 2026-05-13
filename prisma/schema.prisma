@@ -299,14 +299,25 @@ model EngineModel {
   @@map("engine_models")
 }
 
+// Counterparty roles. Grouped here roughly by category for readability:
+//   - Ownership / transaction: OWNER, BUYER, SELLER
+//   - Operating              : CHARTERER, OPERATOR
+//   - Finance                : LENDER (traditional bank debt), FINANCIER
+//                              (sale-leaseback / leasing / fund / non-bank)
+//   - Services               : BROKER, MANAGER (commercial), TECHNICAL_MANAGER,
+//                              INSURER (P&I club / H&M underwriter)
 enum CounterpartyType {
-  CHARTERER
+  OWNER
   BUYER
   SELLER
+  CHARTERER
+  OPERATOR
   LENDER
+  FINANCIER
   BROKER
   MANAGER
-  OPERATOR
+  TECHNICAL_MANAGER
+  INSURER
 }
 
 model Counterparty {
@@ -386,12 +397,15 @@ enum VesselLifecycleStatus {
   SCRAPPED
 }
 
+// Earnings classification (replaces the prototype's operational TC/SPOT/IDLE).
+// Categorises which time bucket a vessel's earnings fall into:
+//   - CURRENT_EARNINGS: actively in service and generating revenue.
+//   - FUTURE_EARNINGS:  not yet earning — newbuilds, pre-delivery, etc.
+//   - HISTORIC_EARNINGS: no longer earning — sold, scrapped, laid up long-term.
 enum EmploymentStatus {
-  TC
-  SPOT
-  IDLE
-  DRYDOCK
-  UNDER_REPAIR
+  CURRENT_EARNINGS
+  HISTORIC_EARNINGS
+  FUTURE_EARNINGS
 }
 
 enum EnvScore {
@@ -481,8 +495,15 @@ model Vessel {
 
   // Status & ESG snapshot
   lifecycleStatus  VesselLifecycleStatus @default(ACTIVE)
-  employmentStatus EmploymentStatus      @default(IDLE)
+  employmentStatus EmploymentStatus      @default(CURRENT_EARNINGS)
   envScore         EnvScore?
+
+  // Sale indicator — cached flag for fast filtering in the Vessels-for-Sale
+  // module. Richer listing data (asking price, broker, listing date) will
+  // live in a separate VesselListing model when M08 ships; this flag stays
+  // on Vessel for performant table filters.
+  isOnSale  Boolean   @default(false)
+  onSaleAt  DateTime?
 
   // Misc
   heroImageUrl String?

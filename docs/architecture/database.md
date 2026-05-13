@@ -47,7 +47,7 @@ Defined in Prisma, not stored as strings, so Postgres enforces validity at the t
 - `Currency` — USD / EUR / GBP / JPY / CNY
 - `FleetVisibility` — PRIVATE / TEAM / READ_ONLY
 - `VesselLifecycleStatus` — ACTIVE / LAID_UP / DRYDOCK / SOLD / SCRAPPED
-- `EmploymentStatus` — TC / SPOT / IDLE / DRYDOCK / UNDER_REPAIR
+- `EmploymentStatus` — CURRENT_EARNINGS / HISTORIC_EARNINGS / FUTURE_EARNINGS (earnings time-bucket; replaces the prototype's operational TC/SPOT/IDLE)
 - `EnvScore` — A / B / C / D / E
 - `CounterpartyType` — CHARTERER / BUYER / SELLER / LENDER / BROKER / MANAGER / OPERATOR
 - `PendingReferenceTable`, `PendingReferenceStatus` — for the admin review queue
@@ -106,6 +106,8 @@ erDiagram
         enum lifecycleStatus
         enum employmentStatus
         enum envScore
+        bool isOnSale
+        datetime onSaleAt
     }
 
     Fleet {

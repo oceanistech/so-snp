@@ -32,9 +32,9 @@ describe("Prisma schema — enum values", () => {
     );
   });
 
-  it("EmploymentStatus includes TC, SPOT, IDLE, DRYDOCK, UNDER_REPAIR", () => {
+  it("EmploymentStatus represents earnings buckets", () => {
     expect(Object.values(EmploymentStatus)).toEqual(
-      expect.arrayContaining(["TC", "SPOT", "IDLE", "DRYDOCK", "UNDER_REPAIR"]),
+      expect.arrayContaining(["CURRENT_EARNINGS", "HISTORIC_EARNINGS", "FUTURE_EARNINGS"]),
     );
   });
 
@@ -48,16 +48,20 @@ describe("Prisma schema — enum values", () => {
     expect(Object.values(EnvScore)).toEqual(["A", "B", "C", "D", "E"]);
   });
 
-  it("CounterpartyType covers the seven roles", () => {
+  it("CounterpartyType covers all 11 roles", () => {
     expect(Object.values(CounterpartyType)).toEqual(
       expect.arrayContaining([
-        "CHARTERER",
+        "OWNER",
         "BUYER",
         "SELLER",
+        "CHARTERER",
+        "OPERATOR",
         "LENDER",
+        "FINANCIER",
         "BROKER",
         "MANAGER",
-        "OPERATOR",
+        "TECHNICAL_MANAGER",
+        "INSURER",
       ]),
     );
   });

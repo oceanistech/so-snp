@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "CounterpartyType" AS ENUM ('CHARTERER', 'BUYER', 'SELLER', 'LENDER', 'BROKER', 'MANAGER', 'OPERATOR');
+CREATE TYPE "CounterpartyType" AS ENUM ('OWNER', 'BUYER', 'SELLER', 'CHARTERER', 'OPERATOR', 'LENDER', 'FINANCIER', 'BROKER', 'MANAGER', 'TECHNICAL_MANAGER', 'INSURER');
 
 -- CreateEnum
 CREATE TYPE "PendingReferenceTable" AS ENUM ('PORT', 'SHIPYARD', 'CLASS_SOCIETY', 'ENGINE_MAKER', 'ENGINE_MODEL', 'COUNTERPARTY');
@@ -14,7 +14,7 @@ CREATE TYPE "FleetVisibility" AS ENUM ('PRIVATE', 'TEAM', 'READ_ONLY');
 CREATE TYPE "VesselLifecycleStatus" AS ENUM ('ACTIVE', 'LAID_UP', 'DRYDOCK', 'SOLD', 'SCRAPPED');
 
 -- CreateEnum
-CREATE TYPE "EmploymentStatus" AS ENUM ('TC', 'SPOT', 'IDLE', 'DRYDOCK', 'UNDER_REPAIR');
+CREATE TYPE "EmploymentStatus" AS ENUM ('CURRENT_EARNINGS', 'HISTORIC_EARNINGS', 'FUTURE_EARNINGS');
 
 -- CreateEnum
 CREATE TYPE "EnvScore" AS ENUM ('A', 'B', 'C', 'D', 'E');
@@ -207,8 +207,10 @@ CREATE TABLE "vessels" (
     "outstandingLoan" DECIMAL(14,2),
     "currency" "Currency" NOT NULL DEFAULT 'USD',
     "lifecycleStatus" "VesselLifecycleStatus" NOT NULL DEFAULT 'ACTIVE',
-    "employmentStatus" "EmploymentStatus" NOT NULL DEFAULT 'IDLE',
+    "employmentStatus" "EmploymentStatus" NOT NULL DEFAULT 'CURRENT_EARNINGS',
     "envScore" "EnvScore",
+    "isOnSale" BOOLEAN NOT NULL DEFAULT false,
+    "onSaleAt" TIMESTAMP(3),
     "heroImageUrl" TEXT,
     "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
