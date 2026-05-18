@@ -1302,6 +1302,26 @@ The current planning state. Updated each sprint review. Today (2026-04-30) every
 | T02-5.2.1 | Add / remove vessel actions | P1 | T02-1.1.2 | brd.md §7.2 FL-7 |
 | T02-5.3.1 | CSV/Excel export of vessel table | P2 | F7 | brd.md §7.2 FL-8 |
 
+### Implementation status — OT-175 (May 2026)
+
+The Fleets listing and Create Fleet form ship as part of OT-175. What's
+landed and what's still parked for later sprints:
+
+| Story | Status | Notes |
+|---|---|---|
+| S02-1.1 (tabs + active fleet) | **Done** | All-Fleets list + per-fleet openable tabs; URL `?created=<id>` carries the create-flow success banner. |
+| S02-2.1 (vessel table columns) | **Done (initial)** | Name, IMO, Type, Year, DWT, Env, FMV, On-Sale. Resale / Newbuild / ValCert columns parked until M06 valuation cert data lands. |
+| S02-2.2 (filters) | **Done** | Type / Year-Built bucket / name search, client-side over the loaded page. |
+| S02-3.1 (vessel detail tabs) | Pending | Awaits M06 Vessel Detail. |
+| S02-3.2 (context widget collapse) | Pending | Wired once S02-3.1 lands. |
+| S02-4.1 (Employment Timeline) | Pending | Needs Employment + Charterer model (M02 — planned for OT-176+). |
+| S02-4.2 (TC Expirations) | Pending | Same — needs Employment model. |
+| S02-5.1 (create + rename + delete) | **Create done** | Rename/delete come with the row-actions step. |
+| S02-5.2 (add / remove vessel) | **Add done (via create form)** | Per-row Add/Remove on fleet detail tracked for the row-actions step. |
+| S02-5.3 (CSV/Excel export) | Pending | F7 helper not built yet. |
+
+Architecture: `web/docs/architecture/fleets-and-vessels.md`.
+
 ---
 
 ## M03. Add Vessel & Create Fleet
