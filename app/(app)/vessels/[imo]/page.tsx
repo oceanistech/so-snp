@@ -1,126 +1,109 @@
+/**
+ * /vessels/[imo] — Vessel Detail page.
+ *
+ * NOTE on the directory name: the route segment is called `[imo]` for
+ * historical prototype reasons, but the value is treated as a Prisma
+ * CUID (per ADR-0002, IMOs aren't globally unique). The dynamic segment
+ * name is a label only; the page validates the value through
+ * `VesselService.getDetailById` (which org-scopes the lookup) and 404s
+ * on miss.
+ *
+ * The page itself is a thin RSC: resolve session, fetch the vessel, and
+ * hand the detail object to the `VesselDetailTabs` client island. That
+ * island renders the prototype's 8-tab strip and the Main Information
+ * panel (matching `html/vessel-details.html`'s layout 1:1). The other
+ * seven tabs render a `ComingInModulePlaceholder` until their owning
+ * modules ship.
+ */
 import Link from "next/link";
-import { ChevronDown, LineChart } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowLeft, Edit3 } from "lucide-react";
 import { AppPageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { type EnvScore } from "@/components/app/env-score-badge";
-import {
-  VesselDetailTabs,
-  type VesselDetail,
-} from "./_tabs";
+import { VesselService } from "@/lib/services/vessel.service";
+import { requireSession } from "@/lib/auth/session";
+import { VesselDetailTabs } from "./vessel-detail-tabs";
 
-/* --------------------------------------------------------------------------
- * Mock data — vessel records keyed by IMO.
- * Until the API is ready, any unmapped IMO falls back to MV Pacific Star.
- * Shapes follow vessel-details.html.
- * -------------------------------------------------------------------------- */
-
-const PACIFIC_STAR: VesselDetail = {
-  imo: "9623148",
-  mmsi: "538006142",
-  name: "MV Pacific Star",
-  flag: "Marshall Islands",
-  type: "Bulk Carrier",
-  classification: "Bureau Veritas (BV)",
-  yearBuilt: 2016,
-  shipyard: "Jiangsu New Yangzi, China",
-  dwt: 82000,
-  grt: 44200,
-  nrt: 27600,
-  loa: "229.0 m",
-  beam: "32.26 m",
-  draft: "14.43 m",
-  engine: "MAN B&W 6G60ME",
-  speed: "14.5 kn (eco 12.5 kn)",
-  fmv: "$28.5M",
-  fmvChange: "+4.0% vs 6 months ago",
-  envScore: "A" satisfies EnvScore,
-  heroImage:
-    "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1200&auto=format&q=80",
-  spec: "Panamax Bulk Carrier · Built 2016 · IMO 9623148 · 82,000 DWT",
-  employment: {
-    type: "Time Charter",
-    charterer: "Oldendorff Carriers",
-    rate: "$14,500 / day",
-    period: "Sep 2025 – Aug 2026",
-    daysRemaining: 154,
-    lastPort: "Port Hedland, AU",
-    voyage: "Hedland → Qingdao",
-    cargo: "Iron Ore — 79,200 MT",
-  },
-  certificates: [
-    { status: "ok", label: "Safety Management Cert — 2027-04" },
-    { status: "ok", label: "Class Certificate (BV) — 2026-09" },
-    { status: "ok", label: "ISM DOC — 2027-01" },
-    { status: "ok", label: "ISSC — 2026-11" },
-    { status: "ok", label: "MLC Certificate — 2027-06" },
-    { status: "warn", label: "Load Line Cert — 2026-06" },
-    { status: "ok", label: "IOPP Certificate — 2026-08" },
-    { status: "ok", label: "P&I Certificate (Gard) — 2026" },
-  ],
-  ownership: [
-    { from: "2022", to: "Present", owner: "Star Bulk Carriers Corp." },
-    { from: "2018", to: "2022", owner: "Diana Shipping Inc." },
-    { from: "2016", to: "2018", owner: "Jiangsu Yangzi Shipping" },
-  ],
-};
-
-const VESSELS: Record<string, VesselDetail> = {
-  [PACIFIC_STAR.imo]: PACIFIC_STAR,
-};
-
-/* -------------------------------------------------------------------------- */
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ imo: string }>;
-}) {
-  const { imo } = await params;
-  const v = VESSELS[imo] ?? PACIFIC_STAR;
-  return { title: `${v.name} · Vessel Details` };
-}
+export const dynamic = "force-dynamic";
 
 export default async function VesselDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ imo: string }>;
+  searchParams: Promise<{ created?: string; tab?: string }>;
 }) {
-  const { imo } = await params;
-  // Allow any IMO during the prototype phase by falling back to Pacific Star
-  // but exposing the requested IMO/name. This keeps cross-links from search /
-  // fleet tables / dashboard from 404-ing.
-  const base = VESSELS[imo] ?? PACIFIC_STAR;
-  const v: VesselDetail = base.imo === imo ? base : { ...base, imo };
+  const session = await requireSession();
+  const { imo: vesselId } = await params;
+  const { created } = await searchParams;
+
+  const vessel = await new VesselService().getDetailById(vesselId, session.orgId);
+  if (!vessel) notFound();
 
   return (
     <div className="flex flex-col">
       <AppPageHeader
         breadcrumb={[
-          { label: "DiscoverySpace" },
-          { label: "Vessel Search", href: "/vessel-search" },
-          { label: "Vessel Details" },
+          { label: "Fleets", href: "/fleetspace" },
+          { label: "Vessels", href: "/fleetspace" },
+          { label: vessel.name },
         ]}
-        title={v.name}
-        subtitle={v.spec}
+        title={vessel.name}
+        subtitle={[
+          vessel.vesselType?.name ?? "Vessel",
+          `Built ${vessel.yearBuilt}`,
+          `IMO ${vessel.imo}`,
+          `${vessel.dwt.toLocaleString()} DWT`,
+        ].join(" · ")}
         actions={
           <>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href={`/cashflow/new?imo=${v.imo}`}>
-                <LineChart className="size-3.5" />
-                Run Cashflow
+            <Button asChild variant="secondary">
+              <Link href="/fleetspace">
+                <ArrowLeft className="size-3.5" />
+                Back to Fleets
               </Link>
             </Button>
-            <Button asChild className="gap-2">
-              <Link href={`/loan-oracle/new?imo=${v.imo}`}>
-                Actions
-                <ChevronDown className="size-3.5" />
-              </Link>
+            <Button variant="secondary" disabled title="Edit comes in a follow-up step">
+              <Edit3 className="size-3.5" />
+              Edit
             </Button>
           </>
         }
       />
 
-      <VesselDetailTabs vessel={v} />
+      {created ? (
+        <div className="mx-8 mt-4 flex items-center gap-3 rounded-md border border-signal-green/40 bg-signal-green/8 px-4 py-2.5 text-[12px]">
+          <span aria-hidden className="inline-block size-2 rounded-full bg-signal-green" />
+          <span>
+            <strong className="font-bold">{vessel.name}</strong> was saved.{" "}
+            {vessel.fleets.length > 0 ? (
+              <>
+                Assigned to{" "}
+                <Link
+                  href="/fleetspace"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  {vessel.fleets[0]!.name}
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                No fleet yet —{" "}
+                <Link
+                  href="/fleetspace"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  add it to a fleet from /fleetspace
+                </Link>
+                .
+              </>
+            )}
+          </span>
+        </div>
+      ) : null}
+
+      <VesselDetailTabs vessel={vessel} />
     </div>
   );
 }

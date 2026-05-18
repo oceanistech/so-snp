@@ -1,16 +1,17 @@
 /**
- * Vessel repository — read-only for now (Prisma calls only).
+ * Vessel repository — Prisma calls for the Vessel + supporting reference
+ * tables. The repository owns nothing but data access; the service is the
+ * only thing that gets to make business decisions.
  *
- * The create/update/delete path lands in a later step (server actions for
- * /vessels/new + /vessels/[id]/edit). What we need *today* is enough to
- * power the fleet listing + create form:
- *
- *   1. `listForOrg` — vessels in the org, optionally filtered by fleet
- *     membership, vessel type root, or year-built bucket. Returns the
- *     shape the UI needs (name, IMO, type label, yearBuilt, dwt, env,
- *     fmv, fleet membership).
- *   2. `listAttachableForOrg` — minimal projection for the "Add Vessels"
- *     checklist on the create-fleet form (id, name, IMO, type label, year).
+ * Today's surface:
+ *   1. `listForOrg` — vessels visible to a UI listing, filterable.
+ *   2. `listAttachableForOrg` — slim projection for the create-fleet checklist.
+ *   3. `findByImoAndName` — case-insensitive lookup for (orgId, imo, name)
+ *      uniqueness enforcement before insert.
+ *   4. `create` — insert a vessel + optional FleetVessel join row in a
+ *      single transaction.
+ *   5. `getDetailById` — full detail payload for the /vessels/[id] page.
+ *   6. `countForOrg` — KPI cards.
  */
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
@@ -107,5 +108,91 @@ export class VesselRepository {
   /** Vessel count (active only) — used for org-wide KPI cards. */
   async countForOrg(orgId: string) {
     return this.db.vessel.count({ where: { orgId, deletedAt: null } });
+  }
+
+  /**
+   * Case-insensitive lookup against `(orgId, imo, name)` — used by the
+   * service to pre-empt the DB unique constraint and return a clean
+   * field-level error to the user.
+   */
+  async findByImoAndName(orgId: string, imo: string, name: string) {
+    return this.db.vessel.findFirst({
+      where: {
+        orgId,
+        imo,
+        name: { equals: name, mode: "insensitive" },
+        deletedAt: null,
+      },
+      select: { id: true, name: true, imo: true },
+    });
+  }
+
+  /**
+   * Insert a vessel and (optionally) attach it to a fleet in one
+   * transaction. Returning the created vessel id so the action can
+   * redirect to `/vessels/[id]`.
+   */
+  async create(
+    data: Prisma.VesselUncheckedCreateInput,
+    fleetId: string | undefined,
+    addedBy: string | undefined,
+  ) {
+    return this.db.$transaction(async (tx) => {
+      const vessel = await tx.vessel.create({ data });
+      if (fleetId) {
+        await tx.fleetVessel.create({
+          data: { fleetId, vesselId: vessel.id, addedBy },
+        });
+      }
+      return vessel;
+    });
+  }
+
+  /**
+   * Full detail payload for the `/vessels/[id]` page — includes the
+   * reference relations (vesselType, flag, shipyard, …) so the page can
+   * render labels without follow-up queries. Returns `null` when the
+   * vessel doesn't exist in the current org (the service translates this
+   * to a 404).
+   */
+  async getDetailById(id: string, orgId: string) {
+    return this.db.vessel.findFirst({
+      where: { id, orgId, deletedAt: null },
+      include: {
+        vesselType: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortLabel: true,
+            parent: { select: { id: true, code: true, name: true } },
+          },
+        },
+        flagCountry: { select: { id: true, iso2: true, name: true } },
+        portOfRegistry: { select: { id: true, name: true } },
+        shipyard: { select: { id: true, name: true, city: true } },
+        classSociety: { select: { id: true, code: true, name: true } },
+        engineModel: { select: { id: true, name: true } },
+        fleetVessels: {
+          where: { deletedAt: null },
+          select: {
+            fleet: { select: { id: true, slug: true, name: true } },
+          },
+        },
+        certificates: {
+          orderBy: [{ expiresAt: "asc" }],
+          select: { id: true, label: true, issuer: true, expiresAt: true },
+        },
+        ownershipHistory: {
+          orderBy: [{ fromDate: "desc" }],
+          select: {
+            id: true,
+            ownerName: true,
+            fromDate: true,
+            toDate: true,
+          },
+        },
+      },
+    });
   }
 }

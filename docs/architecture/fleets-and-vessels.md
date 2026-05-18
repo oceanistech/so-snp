@@ -150,6 +150,47 @@ The HTML prototype's `my-fleet.html` includes an Employments section
 shipping them as a static mock would mis-set expectations. We render an
 inline placeholder in the fleet detail view linking to the future ticket.
 
+## Add Vessel — same layering, slightly bigger payload
+
+The Add Vessel flow follows the same Route → Service → Repository split:
+
+```
+app/(app)/vessels/new/page.tsx           ← RSC shell, fetches refs + fleets
+ └─ AddVesselForm (client island)         ← useActionState form + live preview
+
+app/(app)/vessels/[imo]/page.tsx         ← Detail page (id is a CUID,
+                                            not an IMO — see directory note)
+
+lib/actions/vessel.actions.ts            ← "use server" — createVesselAction
+lib/actions/vessel.form-state.ts         ← shared FleetFormState equivalent
+
+lib/services/vessel.service.ts           ← create() + getDetailById() +
+                                            existing list projections
+lib/services/reference.service.ts        ← loadAddVesselData() (single
+                                            Promise.all over reference repo)
+lib/db/repositories/vessel.repository.ts ← + create(), findByImoAndName(),
+                                            getDetailById()
+lib/db/repositories/reference.repository.ts ← reads for the form dropdowns
+```
+
+**Uniqueness** is `(orgId, imo, name)` per ADR-0002. The service does a
+case-insensitive lookup before insert and maps the conflict to inline
+`imo` + `name` field errors. The DB constraint is the second line of
+defence; the pre-check exists so the user gets a clean message without a
+Prisma `P2002` round trip.
+
+**Optional fleet attachment** at create time: when the form submits
+`fleetId`, `VesselRepository.create` runs the vessel insert + the
+`FleetVessel` row insert inside `prisma.$transaction(...)`. Either both
+land or neither does.
+
+**Two-level vessel-type picker.** The form fetches every active
+`VesselType` once and filters parent vs subtype client-side. The
+`vesselTypeId` posted to the action is always the leaf (subtype) id when
+one is picked, otherwise the parent id. The server schema validates the
+id is a CUID; the leaf-only business rule lands later as a service guard
+when we have schema-level confidence that all leaves exist.
+
 ## Tests
 
 | Path | What it covers |
@@ -159,6 +200,10 @@ inline placeholder in the fleet detail view linking to the future ticket.
 | `lib/actions/__tests__/fleet.actions.test.ts` | redirect on success, field errors, duplicate-name mapping, generic error |
 | `app/(app)/fleetspace/__tests__/fleetspace-client.test.tsx` | empty state, table render, tab switch, justCreated banner |
 | `app/(app)/fleetspace/create/__tests__/create-fleet-form.test.tsx` | sections render, vessel checklist toggle/filter, error rendering |
+| `lib/services/__tests__/vessel.service.test.ts` (extended) | create happy path, (orgId, imo, name) case-insensitive conflict, same-IMO different-name allowed, fleetId stripped from vessel payload |
+| `lib/actions/__tests__/vessel.actions.test.ts` | redirect on success, missing-name + bad-IMO + missing-flag field errors, VesselConflictError → inline errors, fleetId pass-through, formError on unexpected failure |
+| `app/(app)/vessels/new/__tests__/add-vessel-form.test.tsx` | four sections + required markers, flag-state filter, two-level type picker (disabled state, subtype filter, parent-with-no-subtypes falls back, reset on parent change), live preview reflects every input, "Ready to save" toggle, field + form errors |
+| `app/(app)/vessels/[imo]/__tests__/vessel-detail-tabs.test.tsx` | 8-tab strip renders, Main Information default + aria-selected, switching to another tab shows `ComingInModulePlaceholder`, URL `?tab=<key>` written via router.replace, hero card content, KPI cards, profile + specs fields, employment placeholder, certificate chips + placeholder, ownership rows + "Current" badge |
 
 Repository-level (Prisma) tests are deferred to the integration test
 suite (`lib/__tests__/seed.test.ts` already exercises Prisma against the

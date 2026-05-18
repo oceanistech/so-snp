@@ -1369,6 +1369,48 @@ Architecture: `web/docs/architecture/fleets-and-vessels.md`.
 | T03-2.1.1 | `/fleets/new` page + form | P1 | M02 base | create-fleet.html |
 | T03-2.1.2 | Multi-select vessels combobox | P1 | F3 combobox | create-fleet.html |
 
+### Implementation status — OT-175 (May 2026)
+
+The Add Vessel flow ships as part of OT-175. What landed and what's still
+parked for later sprints:
+
+| Story | Status | Notes |
+|---|---|---|
+| S03-1.1 (sectioned form) | **Done** | `/vessels/new` renders Identification, Specifications, Commercial & Financial, Notes; submits via `createVesselAction` server action; redirects to `/vessels/{id}?created=1`. |
+| S03-1.2 (IMO lookup) | Pending | Quick Lookup card shows a "coming soon" placeholder; Signal Ocean client + `/api/vessels/lookup` route land in OT-177. |
+| S03-2.1 (create fleet) | **Done** (OT-175 earlier batch) | See M02 implementation table. |
+| "Save as Draft" (T03-1.1.3) | Pending | The schema models lifecycle = ACTIVE / DRYDOCK / LAID_UP / UNDER_REPAIR / RETIRED, but there's no `DRAFT` state today. Will be added with the edit flow. |
+
+**Vessel-type picker decision.** The form uses a two-level picker: parent
+`VesselType` (Bulk, Tanker, Gas, …) feeds a subtype dropdown filtered
+client-side. The hidden `vesselTypeId` input that posts to the action is
+always the leaf id (subtype) if available, otherwise the parent id. The
+parent/subtype dataset is fetched once via `ReferenceService.loadAddVesselData()`.
+
+**Vessel detail page.** `/vessels/[imo]/page.tsx` now treats its dynamic
+segment as a Prisma CUID (not an IMO) per ADR-0002. The directory name is
+preserved to avoid a permission-gated rename; a follow-up housekeeping step
+will rename to `[id]`.
+
+The page mirrors `html/vessel-details.html`'s Main Information tab one-
+for-one: a hero card (real image when `heroImageUrl` is set, gradient +
+ship icon placeholder otherwise), a 2×2 KPI grid (DWT / Year Built / FMV
+/ Env Score), a Vessel Profile + Technical Specifications row, then a
+Current Employment + Certificates & Documents + Ownership History row.
+Real DB values are used wherever they exist; placeholder copy points to
+the future module otherwise (Employment → M02, Certificates / Ownership
+edit UI → M06 Vessel Detail).
+
+The prototype's other 7 sub-tabs — Valuations, Net Fleet, Financial
+Transactions, Earnings & Expenses, IRR, Environmental Score, Valuation
+Certificates — render with their tab strip + a `ComingInModulePlaceholder`
+card pointing at the owning module's ticket. Tab state is mirrored to
+`?tab=<key>` in the URL so deep links work.
+
+Edit / Delete actions are placeholders pending the row-actions step.
+
+Architecture: `web/docs/architecture/fleets-and-vessels.md`.
+
 ---
 
 ## M04. Vessel Search

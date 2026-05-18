@@ -8,7 +8,7 @@
  *   - fleet membership flattening
  */
 import { describe, expect, it, vi } from "vitest";
-import { VesselService } from "../vessel.service";
+import { VesselService, VesselConflictError } from "../vessel.service";
 import type { VesselRepository } from "@/lib/db/repositories/vessel.repository";
 
 function makeRepo(rows: unknown[]) {
@@ -16,6 +16,9 @@ function makeRepo(rows: unknown[]) {
     listForOrg: vi.fn(async () => rows),
     listAttachableForOrg: vi.fn(async () => rows),
     countForOrg: vi.fn(async () => rows.length),
+    findByImoAndName: vi.fn(async () => null),
+    create: vi.fn(async (data: unknown) => ({ id: "vessel-new", ...(data as object) })),
+    getDetailById: vi.fn(),
   } as unknown as VesselRepository;
 }
 
@@ -133,5 +136,116 @@ describe("VesselService.listAttachableForOrg", () => {
       typeLabel: "Panamax Bulk",
       typeRoot: "BULK",
     });
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * VesselService.create
+ * -------------------------------------------------------------------------- */
+
+function makeRepoWithDupe(existing: { imo: string; name: string } | null) {
+  // Type the full 3-arg signature so `create.mock.calls[0]` is a 3-tuple.
+  const create = vi.fn(
+    async (
+      data: Record<string, unknown>,
+      _fleetId: string | undefined,
+      _addedBy: string | undefined,
+    ) => ({ id: "vessel-new", ...data }),
+  );
+  return {
+    repo: {
+      listForOrg: vi.fn(),
+      listAttachableForOrg: vi.fn(),
+      countForOrg: vi.fn(),
+      findByImoAndName: vi.fn(async (_orgId: string, imo: string, name: string) =>
+        existing && existing.imo === imo && existing.name.toLowerCase() === name.toLowerCase()
+          ? { id: "existing", imo, name }
+          : null,
+      ),
+      create,
+      getDetailById: vi.fn(),
+    } as unknown as VesselRepository,
+    create,
+  };
+}
+
+const validInput = {
+  imo: "9623148",
+  name: "MV Pacific Star",
+  vesselTypeId: "type_1",
+  yearBuilt: 2016,
+  dwt: 82_000,
+  flagCountryId: "country_1",
+};
+
+describe("VesselService.create — happy path", () => {
+  it("trims name + imo and forwards everything else to the repository", async () => {
+    const { repo, create } = makeRepoWithDupe(null);
+    const svc = new VesselService(repo);
+    const vessel = await svc.create(
+      "org_1",
+      { ...validInput, name: "  MV Pacific Star  ", imo: " 9623148 " },
+      "user_1",
+    );
+    expect(create).toHaveBeenCalledOnce();
+    const [data, fleetId, addedBy] = create.mock.calls[0]!;
+    expect(data).toMatchObject({
+      orgId: "org_1",
+      createdBy: "user_1",
+      imo: "9623148",
+      name: "MV Pacific Star",
+      vesselTypeId: "type_1",
+      yearBuilt: 2016,
+      dwt: 82_000,
+      flagCountryId: "country_1",
+    });
+    expect(fleetId).toBeUndefined();
+    expect(addedBy).toBe("user_1");
+    expect(vessel.id).toBe("vessel-new");
+  });
+
+  it("forwards fleetId so the repo attaches the vessel in the same txn", async () => {
+    const { repo, create } = makeRepoWithDupe(null);
+    const svc = new VesselService(repo);
+    await svc.create("org_1", { ...validInput, fleetId: "fleet_x" }, "user_1");
+    const [_data, fleetId] = create.mock.calls[0]!;
+    expect(fleetId).toBe("fleet_x");
+  });
+
+  it("strips fleetId from the vessel payload (it lives on FleetVessel)", async () => {
+    const { repo, create } = makeRepoWithDupe(null);
+    const svc = new VesselService(repo);
+    await svc.create("org_1", { ...validInput, fleetId: "fleet_x" }, "user_1");
+    const [data] = create.mock.calls[0]!;
+    expect(data).not.toHaveProperty("fleetId");
+  });
+});
+
+describe("VesselService.create — uniqueness", () => {
+  it("throws VesselConflictError on exact (imo, name) duplicate", async () => {
+    const { repo } = makeRepoWithDupe({ imo: "9623148", name: "MV Pacific Star" });
+    const svc = new VesselService(repo);
+    await expect(svc.create("org_1", validInput, "user_1")).rejects.toBeInstanceOf(
+      VesselConflictError,
+    );
+  });
+
+  it("throws VesselConflictError on case-insensitive name duplicate", async () => {
+    const { repo } = makeRepoWithDupe({ imo: "9623148", name: "MV Pacific Star" });
+    const svc = new VesselService(repo);
+    await expect(
+      svc.create("org_1", { ...validInput, name: "mv pacific star" }, "user_1"),
+    ).rejects.toBeInstanceOf(VesselConflictError);
+  });
+
+  it("allows same IMO with a different name (per ADR-0002)", async () => {
+    const { repo, create } = makeRepoWithDupe({ imo: "9623148", name: "MV Pacific Star" });
+    const svc = new VesselService(repo);
+    await svc.create(
+      "org_1",
+      { ...validInput, name: "MV Pacific Star (ex-Bluestar)" },
+      "user_1",
+    );
+    expect(create).toHaveBeenCalledOnce();
   });
 });
