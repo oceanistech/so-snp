@@ -413,7 +413,7 @@ export function FleetspaceClient({
             from the fleet bar above. */}
         <div className="flex flex-col">
         {/* Fleet tab bar — flat row of pill tabs on the page background. */}
-          <div className="flex shrink-0 items-center gap-1 overflow-x-auto border px-2 pt-2 pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden mb-6">
+          <div className="flex shrink-0 items-center rounded-t-lg gap-1 overflow-x-auto border px-2 pt-2 pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden mb-6">
           <FleetTab
             label="All Fleets"
             badge={globalKpi.vessels}
@@ -489,7 +489,7 @@ export function FleetspaceClient({
                 renders edge-to-edge, so there's no double-padded
                 "card inside a card" look. */}
         {activeView === "global" ? (
-          <div className="flex flex-col gap-4 rounded-b-lg border bg-card p-4">
+          <div className="flex flex-col gap-4 rounded-b-lg  border bg-card p-4">
             <ViewingLabel fleetName="All Fleets" accent="bg-primary" />
             <StatsRow
               activeFleet={null}
