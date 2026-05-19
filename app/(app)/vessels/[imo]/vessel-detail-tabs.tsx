@@ -13,30 +13,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Anchor,
-  Briefcase,
-  CalendarClock,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  Compass,
-  DollarSign,
-  Factory,
-  FileSpreadsheet,
-  Gauge,
-  Hash,
-  History,
-  Leaf,
-  Map as MapIcon,
-  Package,
-  Ship,
-  Shield,
-  TrendingUp,
-  Users,
-  Wallet,
-  Wrench,
-} from "lucide-react";
+import { Anchor, ChevronRight, FileSpreadsheet, Ship } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EnvScoreBadge } from "@/components/app/env-score-badge";
 import { cn } from "@/lib/utils";
@@ -121,7 +98,27 @@ const fmtMonth = (d: Date | null) =>
  * Component
  * -------------------------------------------------------------------------- */
 
-export function VesselDetailTabs({ vessel }: { vessel: VesselDetail }) {
+export function VesselDetailTabs({
+  vessel,
+  embedded = false,
+  headerSlot,
+}: {
+  vessel: VesselDetail;
+  /**
+   * When `true`, the component is rendered inside the fleet view's
+   * vessel sub-tab. URL updates are suppressed (clicking a tab would
+   * otherwise jump the user out of /fleetspace) and the layout is
+   * tightened so it nests inside the fleet wrapper card.
+   */
+  embedded?: boolean;
+  /**
+   * Optional content rendered on the white "header zone" above the
+   * sub-tab strip. Used by the embedded mode to render the prototype's
+   * page-header (breadcrumb + name + subtitle + Actions menu) so the
+   * embedded experience matches the standalone vessel detail page.
+   */
+  headerSlot?: React.ReactNode;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTab = (searchParams.get("tab") ?? "main") as TabKey;
@@ -131,6 +128,7 @@ export function VesselDetailTabs({ vessel }: { vessel: VesselDetail }) {
 
   function selectTab(key: TabKey) {
     setActive(key);
+    if (embedded) return; // sub-tab inside /fleetspace — don't touch the URL
     const next = new URLSearchParams(searchParams);
     if (key === "main") next.delete("tab");
     else next.set("tab", key);
@@ -140,35 +138,47 @@ export function VesselDetailTabs({ vessel }: { vessel: VesselDetail }) {
   }
 
   return (
-    <div>
-      {/* Sub-tab strip — prototype `.subtabs` */}
-      <nav
-        aria-label="Vessel sections"
-        className="-mb-px flex flex-wrap gap-1 border-b px-8 pt-2"
-      >
-        {TABS.map((tab) => {
-          const isActive = active === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => selectTab(tab.key)}
-              className={cn(
-                "rounded-t-md border border-b-0 px-3 py-2 text-[12px] font-semibold transition-colors",
-                isActive
-                  ? "border-border bg-card text-foreground"
-                  : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
+    <div className="flex flex-col">
+      {/* White header zone — page header (when embedded) + sub-tab strip.
+          In embedded mode we drop the top border and the top-rounded
+          corners so the active outer vessel tab (in /fleetspace) merges
+          flush with this header zone, mirroring the prototype's
+          tab-attached-to-content folder look. */}
+      <div className={cn("bg-card", embedded ? "rounded-b-lg border" : "")}>
+        {headerSlot}
+        <nav
+          aria-label="Vessel sections"
+          className={cn(
+            "-mb-px flex flex-wrap gap-1 border-b pt-2",
+            embedded ? "px-4" : "px-8",
+          )}
+        >
+          {TABS.map((tab) => {
+            const isActive = active === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => selectTab(tab.key)}
+                className={cn(
+                  "rounded-t-md border border-b-0 px-3 py-2 text-[12px] font-semibold transition-colors",
+                  isActive
+                    ? "border-border bg-card text-foreground"
+                    : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-      <div className="p-8">
+      {/* Muted body zone — cards float on a light-gray background so the
+          white card surfaces stand out, matching `html/vessel-details.html`. */}
+      <div className={cn("", embedded ? "p-4" : "p-8")}>
         {active === "main" ? (
           <MainInformationPanel vessel={vessel} />
         ) : (
@@ -204,28 +214,24 @@ function MainInformationPanel({ vessel }: { vessel: VesselDetail }) {
             label="Deadweight Tonnage"
             value={vessel.dwt.toLocaleString()}
             meta={`DWT · ${vessel.vesselType?.name ?? "Vessel"}`}
-            icon={<Gauge className="size-4" />}
           />
           <KpiCard
             accent="bg-accent"
             label="Year Built"
             value={String(vessel.yearBuilt)}
             meta={vessel.shipyard?.name ?? `${age} years old`}
-            icon={<CalendarDays className="size-4" />}
           />
           <KpiCard
             accent="bg-signal-green"
             label="Fair Market Value"
             value={usdShort(vessel.currentFmvUsd)}
             meta={vessel.acquisitionCostUsd != null ? `Acquired ${usdShort(vessel.acquisitionCostUsd)}` : "Auto-valuation pending"}
-            icon={<DollarSign className="size-4" />}
           />
           <KpiCard
             accent="bg-signal-orange"
             label="Environmental Score"
             value={vessel.envScore ?? "—"}
             meta={vessel.envScore ? "CII 2025 baseline" : "No CII score yet"}
-            icon={<Leaf className="size-4" />}
           />
         </div>
       </div>
@@ -234,10 +240,7 @@ function MainInformationPanel({ vessel }: { vessel: VesselDetail }) {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Ship className="size-4 text-muted-foreground" />
-              <SectionTitle>Vessel Profile</SectionTitle>
-            </div>
+            <SectionTitle>Vessel Profile</SectionTitle>
             <span
               className={cn(
                 "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold",
@@ -272,8 +275,7 @@ function MainInformationPanel({ vessel }: { vessel: VesselDetail }) {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center gap-2">
-            <Wrench className="size-4 text-muted-foreground" />
+          <CardHeader>
             <SectionTitle>Technical Specifications</SectionTitle>
           </CardHeader>
           <dl className="grid gap-2 p-4 pt-0 text-[12px]">
@@ -397,22 +399,17 @@ function KpiCard({
   label,
   value,
   meta,
-  icon,
 }: {
   accent: string;
   label: string;
   value: React.ReactNode;
   meta?: string;
-  icon?: React.ReactNode;
 }) {
   return (
     <div className="relative flex flex-col justify-between overflow-hidden rounded-md border bg-card p-4 shadow-sm">
       <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", accent)} />
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[11px] font-bold uppercase tracking-[0.4px] text-muted-foreground">
-          {label}
-        </div>
-        {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+      <div className="text-[11px] font-bold uppercase tracking-[0.4px] text-muted-foreground">
+        {label}
       </div>
       <div className="mt-1 font-display text-[20px] font-extrabold leading-tight tracking-[-0.4px] tabular-nums">
         {value}
@@ -463,10 +460,7 @@ function CurrentEmploymentCard({ vessel }: { vessel: VesselDetail }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Compass className="size-4 text-muted-foreground" />
-          <SectionTitle>Current Employment</SectionTitle>
-        </div>
+        <SectionTitle>Current Employment</SectionTitle>
         <EmploymentBadge status={vessel.employmentStatus} />
       </CardHeader>
       <div className="space-y-2 p-4 pt-0 text-[12px]">
@@ -514,8 +508,7 @@ function EmploymentBadge({ status }: { status: string }) {
 function CertificatesCard({ vessel }: { vessel: VesselDetail }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center gap-2">
-        <Shield className="size-4 text-muted-foreground" />
+      <CardHeader>
         <SectionTitle>Certificates &amp; Documents</SectionTitle>
       </CardHeader>
       <div className="p-4 pt-0">
@@ -561,8 +554,7 @@ function CertificatesCard({ vessel }: { vessel: VesselDetail }) {
 function OwnershipHistoryCard({ vessel }: { vessel: VesselDetail }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center gap-2">
-        <History className="size-4 text-muted-foreground" />
+      <CardHeader>
         <SectionTitle>Ownership History</SectionTitle>
       </CardHeader>
       <div className="p-4 pt-0">

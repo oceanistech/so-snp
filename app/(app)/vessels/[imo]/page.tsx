@@ -17,12 +17,13 @@
  */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Edit3 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AppPageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { VesselService } from "@/lib/services/vessel.service";
 import { requireSession } from "@/lib/auth/session";
 import { VesselDetailTabs } from "./vessel-detail-tabs";
+import { VesselActionsMenu } from "./vessel-actions-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +64,7 @@ export default async function VesselDetailPage({
                 Back to Fleets
               </Link>
             </Button>
-            <Button variant="secondary" disabled title="Edit comes in a follow-up step">
-              <Edit3 className="size-3.5" />
-              Edit
-            </Button>
+            <VesselActionsMenu vesselId={vessel.id} vesselName={vessel.name} />
           </>
         }
       />

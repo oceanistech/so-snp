@@ -116,7 +116,38 @@ describe("FleetspaceClient — populated", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
     // Detail view: filter bar + vessel row
     expect(screen.getByPlaceholderText(/search vessel name/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "MV Pacific Star" })).toBeInTheDocument();
+    // Vessel name is now a button that opens the vessel as a sub-tab,
+    // not a navigation link.
+    expect(screen.getByRole("button", { name: "MV Pacific Star" })).toBeInTheDocument();
+  });
+
+  it("opens a vessel name click as a nested sub-tab", async () => {
+    // Mock the lazy fetch to /api/vessels/<id>
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "v1", name: "MV Pacific Star" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    render(
+      <FleetspaceClient
+        initialFleets={[fleet({ name: "Fleet Alpha", vesselCount: 1 })]}
+        initialVessels={[vessel({ name: "MV Pacific Star" })]}
+        justCreated={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    fireEvent.click(screen.getByRole("button", { name: "MV Pacific Star" }));
+    // After click, the vessel-browser-bar should have both "All Vessels"
+    // (with badge 1) and "MV Pacific Star" as a sub-tab.
+    expect(screen.getByRole("tab", { name: /All Vessels/ })).toBeInTheDocument();
+    const vesselTab = screen.getByRole("tab", { name: /MV Pacific Star/ });
+    expect(vesselTab).toBeInTheDocument();
+    expect(vesselTab).toHaveAttribute("aria-selected", "true");
+    expect(fetchSpy).toHaveBeenCalledWith("/api/vessels/v1");
+    fetchSpy.mockRestore();
   });
 
   it("filters vessels by name in the detail view", () => {

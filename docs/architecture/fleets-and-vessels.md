@@ -191,6 +191,52 @@ one is picked, otherwise the parent id. The server schema validates the
 id is a CUID; the leaf-only business rule lands later as a service guard
 when we have schema-level confidence that all leaves exist.
 
+## Nested vessel sub-tabs in /fleetspace
+
+Matches the prototype's two-level tab pattern (`my-fleet.html`'s
+`.vessel-browser-bar`):
+
+```
+Level 1 — Fleet tabs
+  All Fleets | Fleet Alpha | Fleet Beta
+
+Level 2 — Vessel sub-tabs (only inside a specific fleet)
+  All Vessels (8) | MV Pacific Star (x) | MT Helios (x)
+```
+
+State lives on `FleetspaceClient` and is keyed by fleet id:
+
+- `openVesselsByFleet: Record<fleetId, vesselId[]>` — ordered list of
+  open sub-tabs per fleet.
+- `activeVesselByFleet: Record<fleetId, "all" | vesselId>` — the
+  currently selected sub-tab per fleet.
+- `vesselDetailCache: Record<vesselId, VesselDetail | "loading" | "error">`
+  — memoised lazy-fetch responses.
+
+**Lazy fetching.** Clicking a vessel name calls `openVesselTab(fleetId, vesselId)`
+which adds the tab + marks the cache slot `"loading"`. A `useEffect`
+notices new loading slots and dispatches a single `fetch()` per vessel to
+`/api/vessels/[id]`. The response is run through `hydrateVesselDetailDates`
+(JSON loses Date types) before being committed to the cache. Subsequent
+opens of the same vessel hit the cache instantly.
+
+**Closing a fleet tab** drops the fleet's per-fleet vessel state (open
+list + active key); the detail cache is intentionally preserved so
+re-opening from any fleet remains instant.
+
+**Why an API route, not a server action.** Server actions are the right
+fit for mutations; reads benefit from being addressable URLs that can be
+hit by `fetch`, paginated/streamed in the future, and reused by an
+embedded preview (e.g. Vessel Search M04). The route lives at
+`app/api/vessels/[id]/route.ts` and is the only HTTP read endpoint for a
+vessel today.
+
+**Vessel name click → sub-tab open.** The fleet vessel table now renders
+the name as a `<button>` (was a `<Link>`) that calls `openVesselTab`.
+Cmd/Ctrl-click still works because the user can navigate to
+`/vessels/[id]` directly from the URL or the vessel detail page itself —
+the sub-tab pattern is the in-fleet workflow, not the only path.
+
 ## Tests
 
 | Path | What it covers |
@@ -204,6 +250,7 @@ when we have schema-level confidence that all leaves exist.
 | `lib/actions/__tests__/vessel.actions.test.ts` | redirect on success, missing-name + bad-IMO + missing-flag field errors, VesselConflictError → inline errors, fleetId pass-through, formError on unexpected failure |
 | `app/(app)/vessels/new/__tests__/add-vessel-form.test.tsx` | four sections + required markers, flag-state filter, two-level type picker (disabled state, subtype filter, parent-with-no-subtypes falls back, reset on parent change), live preview reflects every input, "Ready to save" toggle, field + form errors |
 | `app/(app)/vessels/[imo]/__tests__/vessel-detail-tabs.test.tsx` | 8-tab strip renders, Main Information default + aria-selected, switching to another tab shows `ComingInModulePlaceholder`, URL `?tab=<key>` written via router.replace, hero card content, KPI cards, profile + specs fields, employment placeholder, certificate chips + placeholder, ownership rows + "Current" badge |
+| `app/(app)/vessels/[imo]/__tests__/vessel-actions-menu.test.tsx` | Actions trigger renders with the right label + `aria-haspopup="menu"`. Open + click flow is covered by Playwright (Radix portal + jsdom don't play nicely). |
 
 Repository-level (Prisma) tests are deferred to the integration test
 suite (`lib/__tests__/seed.test.ts` already exercises Prisma against the

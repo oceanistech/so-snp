@@ -37,7 +37,9 @@ import { EnvScoreBadge } from "@/components/app/env-score-badge";
 import { TablePagination } from "@/components/app/table-pagination";
 import { cn } from "@/lib/utils";
 import type { FleetSummary } from "@/lib/services/fleet.service";
-import type { VesselListItem } from "@/lib/services/vessel.service";
+import type { VesselListItem, VesselDetail } from "@/lib/services/vessel.service";
+import { VesselDetailTabs } from "@/app/(app)/vessels/[imo]/vessel-detail-tabs";
+import { VesselActionsMenu } from "@/app/(app)/vessels/[imo]/vessel-actions-menu";
 
 /* --------------------------------------------------------------------------
  * Visual helpers — match the prototype's type tag and dot colour palette.
@@ -56,6 +58,9 @@ const TYPE_TAG: Record<
 };
 
 /** Cycle through the prototype's tab accent colours so each fleet gets one. */
+/** Solid colour used by the dot indicator on every vessel sub-tab. */
+const VESSEL_DOT = "bg-primary";
+
 const TAB_ACCENTS = [
   "bg-primary",
   "bg-signal-green",
@@ -90,6 +95,33 @@ function fmtCreated(d: Date) {
   }).format(d);
 }
 
+/**
+ * `JSON.parse` turns Date fields into ISO strings; the `VesselDetail`
+ * shape declares them as `Date | null`, so re-hydrate before handing the
+ * payload to React components that call `.getTime()` etc.
+ */
+function hydrateVesselDetailDates(raw: VesselDetail): VesselDetail {
+  const toDate = (v: unknown): Date | null =>
+    v == null ? null : typeof v === "string" || typeof v === "number" ? new Date(v) : (v as Date);
+  return {
+    ...raw,
+    acquisitionDate: toDate(raw.acquisitionDate),
+    onSaleAt: toDate(raw.onSaleAt),
+    nextSpecialSurvey: toDate(raw.nextSpecialSurvey),
+    createdAt: toDate(raw.createdAt) ?? new Date(),
+    updatedAt: toDate(raw.updatedAt) ?? new Date(),
+    certificates: raw.certificates.map((c) => ({
+      ...c,
+      expiresAt: toDate(c.expiresAt),
+    })),
+    ownershipHistory: raw.ownershipHistory.map((o) => ({
+      ...o,
+      fromDate: toDate(o.fromDate),
+      toDate: toDate(o.toDate),
+    })),
+  };
+}
+
 /* --------------------------------------------------------------------------
  * Props + global derived state
  * -------------------------------------------------------------------------- */
@@ -113,10 +145,140 @@ export function FleetspaceClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  /* Tab state — "global" is always present; openTabs holds fleet IDs. */
-  const [activeView, setActiveView] = React.useState<string>("global");
-  const [openTabs, setOpenTabs] = React.useState<string[]>([]);
+  /* --------------------------------------------------------------------
+   * Tab state — derived from URL on first render so refresh restores the
+   * exact tab the user was on. URL contract:
+   *   /fleetspace                          → All Fleets
+   *   /fleetspace?fleet=<id>               → fleet view, All Vessels sub-tab
+   *   /fleetspace?fleet=<id>&vessel=<id>   → fleet view, vessel sub-tab
+   * Tab clicks call `router.replace` (no scroll) so the back/forward
+   * buttons and copy-the-URL workflow both behave naturally.
+   * ------------------------------------------------------------------ */
+  const initialState = React.useMemo(() => {
+    const fleetParam = searchParams.get("fleet");
+    const vesselParam = searchParams.get("vessel");
+    const validFleetId =
+      fleetParam && initialFleets.some((f) => f.id === fleetParam) ? fleetParam : null;
+    const validVesselId =
+      validFleetId && vesselParam
+        ? initialVessels.some(
+            (v) =>
+              v.id === vesselParam &&
+              v.fleets.some((fl) => fl.id === validFleetId),
+          )
+          ? vesselParam
+          : null
+        : null;
+    return {
+      activeView: (validFleetId ?? "global") as string,
+      openTabs: validFleetId ? [validFleetId] : ([] as string[]),
+      openVesselsByFleet: (validFleetId && validVesselId
+        ? { [validFleetId]: [validVesselId] }
+        : {}) as Record<string, string[]>,
+      activeVesselByFleet: (validFleetId && validVesselId
+        ? { [validFleetId]: validVesselId }
+        : {}) as Record<string, string>,
+      // Pre-flag the loading slot so the lazy-fetch effect kicks off
+      // immediately when we hydrate from a `?vessel=` URL.
+      vesselDetailCache: (validVesselId
+        ? { [validVesselId]: "loading" as const }
+        : {}) as Record<string, VesselDetail | "loading" | "error">,
+    };
+    // Empty deps — only computed once at mount. State diverges from URL
+    // after that and is re-synchronised by `useEffect` below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [activeView, setActiveView] = React.useState<string>(initialState.activeView);
+  const [openTabs, setOpenTabs] = React.useState<string[]>(initialState.openTabs);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
+
+  /* Nested vessel sub-tabs — keyed per fleet.
+   *   - openVesselsByFleet[fleetId] is the ordered list of vessel ids open
+   *     as sub-tabs in that fleet
+   *   - activeVesselByFleet[fleetId] is "all" (the All Vessels table) or a
+   *     specific vessel id (its detail panel)
+   *   - vesselDetailCache memoises the API response so re-opening a sub-tab
+   *     doesn't re-fetch. Values can be `"loading"`, `"error"`, or the
+   *     full VesselDetail object.
+   */
+  const [openVesselsByFleet, setOpenVesselsByFleet] = React.useState<
+    Record<string, string[]>
+  >(initialState.openVesselsByFleet);
+  const [activeVesselByFleet, setActiveVesselByFleet] = React.useState<
+    Record<string, string>
+  >(initialState.activeVesselByFleet);
+  const [vesselDetailCache, setVesselDetailCache] = React.useState<
+    Record<string, VesselDetail | "loading" | "error">
+  >(initialState.vesselDetailCache);
+
+  /** Open a vessel as a sub-tab inside a fleet view (or switch to it if
+   *  already open). Triggers a lazy fetch when we haven't seen this vessel
+   *  before; subsequent opens hit the cache. */
+  const openVesselTab = React.useCallback(
+    (fleetId: string, vesselId: string) => {
+      setOpenVesselsByFleet((prev) => {
+        const list = prev[fleetId] ?? [];
+        if (list.includes(vesselId)) return prev;
+        return { ...prev, [fleetId]: [...list, vesselId] };
+      });
+      setActiveVesselByFleet((prev) => ({ ...prev, [fleetId]: vesselId }));
+
+      setVesselDetailCache((prev) => {
+        if (prev[vesselId] != null) return prev;
+        return { ...prev, [vesselId]: "loading" };
+      });
+    },
+    [],
+  );
+
+  // Side-effect: kick off fetches for any vessel we just marked "loading".
+  React.useEffect(() => {
+    for (const [vesselId, value] of Object.entries(vesselDetailCache)) {
+      if (value !== "loading") continue;
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await fetch(`/api/vessels/${vesselId}`);
+          if (!res.ok) throw new Error(`Status ${res.status}`);
+          const data = (await res.json()) as VesselDetail;
+          // Re-hydrate the Date fields — JSON.parse gave us strings.
+          if (!cancelled) {
+            setVesselDetailCache((prev) => ({
+              ...prev,
+              [vesselId]: hydrateVesselDetailDates(data),
+            }));
+          }
+        } catch (err) {
+          console.error("[openVesselTab] fetch failed", err);
+          if (!cancelled) {
+            setVesselDetailCache((prev) => ({ ...prev, [vesselId]: "error" }));
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [vesselDetailCache]);
+
+  function closeVesselTab(fleetId: string, vesselId: string) {
+    setOpenVesselsByFleet((prev) => {
+      const list = (prev[fleetId] ?? []).filter((id) => id !== vesselId);
+      return { ...prev, [fleetId]: list };
+    });
+    setActiveVesselByFleet((prev) => {
+      if (prev[fleetId] !== vesselId) return prev;
+      // Pick the next sub-tab, otherwise fall back to All Vessels
+      const list = (openVesselsByFleet[fleetId] ?? []).filter((id) => id !== vesselId);
+      const next = list[list.length - 1] ?? "all";
+      return { ...prev, [fleetId]: next };
+    });
+  }
+
+  function switchVesselSubTab(fleetId: string, key: string) {
+    setActiveVesselByFleet((prev) => ({ ...prev, [fleetId]: key }));
+  }
 
   /* Global KPIs — computed once from the listing payload. */
   const globalKpi = React.useMemo<GlobalKpi>(() => {
@@ -142,6 +304,24 @@ export function FleetspaceClient({
     [initialFleets, activeView],
   );
 
+  /* Mirror the active fleet / vessel selection back to the URL. The deps
+   * are deliberately narrow — we read a single string from
+   * `activeVesselByFleet` and only re-run when the *active* sub-tab
+   * changes (not on every open/close of an unrelated vessel tab). */
+  const activeVesselId =
+    activeView !== "global" ? activeVesselByFleet[activeView] ?? null : null;
+  React.useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeView !== "global") {
+      params.set("fleet", activeView);
+      if (activeVesselId && activeVesselId !== "all") {
+        params.set("vessel", activeVesselId);
+      }
+    }
+    const qs = params.toString();
+    router.replace(`/fleetspace${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [activeView, activeVesselId, router]);
+
   function openFleet(id: string) {
     setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setActiveView(id);
@@ -149,6 +329,19 @@ export function FleetspaceClient({
   function closeFleet(id: string) {
     setOpenTabs((prev) => prev.filter((x) => x !== id));
     if (activeView === id) setActiveView("global");
+    // Drop the fleet's nested vessel state — re-opening the fleet starts fresh.
+    setOpenVesselsByFleet((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setActiveVesselByFleet((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   function dismissBanner() {
@@ -210,63 +403,138 @@ export function FleetspaceClient({
           </div>
         ) : null}
 
-        {/* Tab bar — prototype `.fleet-browser-bar` */}
-        <div>
-          <div className="relative z-[1] flex shrink-0 items-stretch gap-[2px] overflow-x-auto rounded-t-md border border-b-0 bg-muted/40 px-2 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <FleetTab
-              label="All Fleets"
-              badge={globalKpi.vessels}
-              accent="bg-primary"
-              active={activeView === "global"}
-              onClick={() => setActiveView("global")}
+        {/* Tab + content stack — folder-tab pills on the page background.
+            We use `flex-col` with NO gap so the vessel bar (or fleet bar,
+            when no fleet is open) can sit flush against the content card
+            below — `-mb-px` on the active tab then overlaps the content
+            card's top border, hiding the horizontal line where the tab
+            sits and producing the prototype's "tab-attached-to-content"
+            look. The vessel bar adds its own `mt-5` for breathing space
+            from the fleet bar above. */}
+        <div className="flex flex-col">
+        {/* Fleet tab bar — flat row of pill tabs on the page background. */}
+          <div className="flex shrink-0 items-center gap-1 overflow-x-auto border px-2 pt-2 pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden mb-6">
+          <FleetTab
+            label="All Fleets"
+            badge={globalKpi.vessels}
+            accent="bg-primary"
+            active={activeView === "global"}
+            onClick={() => setActiveView("global")}
+          />
+          {openTabs.map((id) => {
+            const f = initialFleets.find((x) => x.id === id);
+            if (!f) return null;
+            const idx = initialFleets.findIndex((x) => x.id === id);
+            return (
+              <FleetTab
+                key={id}
+                label={f.name}
+                badge={f.vesselCount}
+                accent={accentFor(idx)}
+                active={activeView === id}
+                onClick={() => setActiveView(id)}
+                onClose={() => closeFleet(id)}
+              />
+            );
+          })}
+        </div>
+
+        {/* Vessel tab bar — sits 20px below the fleet bar so the two tab
+            rows read as two distinct strips. `-mb-px` on the active
+            vessel tab still merges it flush with the content card below. */}
+        {activeFleet ? (
+          <div
+            role="tablist"
+            aria-label={`${activeFleet.name} sub-tabs`}
+            className="flex flex-wrap items-center gap-1"
+          >
+            <VesselSubTab
+              label="All Vessels"
+              badge={
+                initialVessels.filter((v) =>
+                  v.fleets.some((fl) => fl.id === activeFleet.id),
+                ).length
+              }
+              active={(activeVesselByFleet[activeFleet.id] ?? "all") === "all"}
+              onClick={() => switchVesselSubTab(activeFleet.id, "all")}
             />
-            {openTabs.map((id) => {
-              const f = initialFleets.find((x) => x.id === id);
-              if (!f) return null;
-              const idx = initialFleets.findIndex((x) => x.id === id);
+            {(openVesselsByFleet[activeFleet.id] ?? []).map((vesselId) => {
+              const v = initialVessels.find((x) => x.id === vesselId);
+              const cached = vesselDetailCache[vesselId];
+              const label =
+                v?.name ??
+                (cached && cached !== "loading" && cached !== "error"
+                  ? cached.name
+                  : "Vessel");
               return (
-                <FleetTab
-                  key={id}
-                  label={f.name}
-                  badge={f.vesselCount}
-                  accent={accentFor(idx)}
-                  dot={accentFor(idx)}
-                  active={activeView === id}
-                  onClick={() => setActiveView(id)}
-                  onClose={() => closeFleet(id)}
+                <VesselSubTab
+                  key={vesselId}
+                  label={label}
+                  active={activeVesselByFleet[activeFleet.id] === vesselId}
+                  dot={VESSEL_DOT}
+                  onClick={() => switchVesselSubTab(activeFleet.id, vesselId)}
+                  onClose={() => closeVesselTab(activeFleet.id, vesselId)}
                 />
               );
             })}
           </div>
+        ) : null}
 
-          {/* Browser content area — prototype `.fleet-browser-content` */}
-          <div className="flex flex-col gap-4 rounded-b-md border bg-card p-4">
-            <ViewingLabel
-              fleetName={activeFleet?.name ?? "All Fleets"}
-              accent={
-                activeFleet
-                  ? accentFor(initialFleets.findIndex((f) => f.id === activeFleet.id))
-                  : "bg-primary"
-              }
-            />
-
+        {/* Content area — switches presentation based on what's active:
+              • Fleet content (All Fleets list OR a fleet's All Vessels
+                view): wrapped in a white card with rounded border + p-4
+                so the KPIs and tables sit on a unified white surface.
+              • Vessel sub-tab: NO wrapping card. `VesselDetailTabs` has
+                its own white-header + muted-body card structure and
+                renders edge-to-edge, so there's no double-padded
+                "card inside a card" look. */}
+        {activeView === "global" ? (
+          <div className="flex flex-col gap-4 rounded-b-lg border bg-card p-4">
+            <ViewingLabel fleetName="All Fleets" accent="bg-primary" />
             <StatsRow
-              activeFleet={activeFleet ?? null}
+              activeFleet={null}
               global={globalKpi}
               fleetCount={initialFleets.length}
             />
-
-            {activeView === "global" ? (
-              <AllFleetsView fleets={initialFleets} onOpenFleet={openFleet} />
-            ) : activeFleet ? (
+            <AllFleetsView fleets={initialFleets} onOpenFleet={openFleet} />
+          </div>
+        ) : activeFleet ? (
+          (activeVesselByFleet[activeFleet.id] ?? "all") === "all" ? (
+            <div className="flex flex-col gap-4 rounded-b-lg border bg-card p-4">
+              <ViewingLabel
+                fleetName={activeFleet.name}
+                accent={accentFor(
+                  initialFleets.findIndex((f) => f.id === activeFleet.id),
+                )}
+              />
+              <StatsRow
+                activeFleet={activeFleet}
+                global={globalKpi}
+                fleetCount={initialFleets.length}
+              />
               <FleetDetailView
                 fleet={activeFleet}
                 vessels={initialVessels.filter((v) =>
                   v.fleets.some((fl) => fl.id === activeFleet.id),
                 )}
+                onOpenVessel={(vesselId) =>
+                  openVesselTab(activeFleet.id, vesselId)
+                }
               />
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <VesselSubTabContent
+              vesselId={activeVesselByFleet[activeFleet.id]!}
+              fleetName={activeFleet.name}
+              fallbackName={
+                initialVessels.find(
+                  (v) => v.id === activeVesselByFleet[activeFleet.id],
+                )?.name ?? "Vessel"
+              }
+              cached={vesselDetailCache[activeVesselByFleet[activeFleet.id]!]}
+            />
+          )
+        ) : null}
         </div>
       </div>
     </div>
@@ -608,9 +876,11 @@ const YEAR_TEST: Record<string, (y: number) => boolean> = {
 function FleetDetailView({
   fleet,
   vessels,
+  onOpenVessel,
 }: {
   fleet: FleetSummary;
   vessels: VesselListItem[];
+  onOpenVessel: (vesselId: string) => void;
 }) {
   const [filterType, setFilterType] = React.useState<string>("");
   const [filterYear, setFilterYear] = React.useState<string>("");
@@ -712,12 +982,13 @@ function FleetDetailView({
                 return (
                   <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-3 py-2.5">
-                      <Link
-                        href={`/vessels/${v.id}`}
-                        className="font-semibold text-primary hover:underline"
+                      <button
+                        type="button"
+                        onClick={() => onOpenVessel(v.id)}
+                        className="text-left font-semibold text-primary hover:underline"
                       >
                         {v.name}
-                      </Link>
+                      </button>
                     </td>
                     <td className="px-3 py-2.5 font-mono text-[11px] tabular-nums text-muted-foreground">
                       {v.imo}
@@ -803,6 +1074,168 @@ function FleetDetailView({
 }
 
 /* --------------------------------------------------------------------------
+ * FleetViewWithVesselTabs — wraps FleetDetailView with the nested vessel
+ * sub-tab strip (All Vessels + per-vessel tabs). Matches the prototype's
+ * `.vessel-browser-bar` directly above the fleet content.
+ * -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ * VesselSubTab — single tab in the vessel-browser-bar
+ * -------------------------------------------------------------------------- */
+function VesselSubTab({
+  label,
+  badge,
+  active = false,
+  dot,
+  onClick,
+  onClose,
+}: {
+  label: string;
+  badge?: number;
+  active?: boolean;
+  /**
+   * Tailwind `bg-*` class for the small dot rendered next to the vessel
+   * name. Used to colour-code vessel tabs by type root (BULK = primary,
+   * TANKER = orange, …). The "All Vessels" tab passes no dot so its
+   * row stays clean.
+   */
+  dot?: string;
+  onClick: () => void;
+  onClose?: () => void;
+}) {
+  return (
+    <div
+      role="tab"
+      aria-selected={active}
+      className={cn(
+        // Folder-tab: rounded top corners only, white bg, 1px gray borders
+        // on top + sides, no bottom border, `-mb-px` to overlap the content
+        // below. No blue top stripe — the primary accent is reserved for
+        // the fleet tab row above.
+        "group relative inline-flex items-center gap-1.5 rounded-t-sm px-4 py-2 text-[12px] font-semibold transition-colors",
+        active
+          ? "-mb-px border border-b-0 border-border bg-card text-foreground"
+          : "border border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+      )}
+    >
+      <button type="button" onClick={onClick} className="flex items-center gap-1.5">
+        {dot ? (
+          <span className={cn("inline-block size-2 shrink-0 rounded-full", dot)} />
+        ) : null}
+        <span className="max-w-[160px] truncate">{label}</span>
+        {badge != null ? (
+          <span
+            className={cn(
+              "rounded-full px-1.5 text-[10px] font-bold leading-[16px] tabular-nums",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {badge}
+          </span>
+        ) : null}
+      </button>
+      {onClose ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          aria-label={`Close ${label}`}
+          className={cn(
+            "inline-flex size-4 items-center justify-center rounded-sm text-muted-foreground transition-all hover:bg-signal-magenta/12 hover:text-signal-magenta",
+            active ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * VesselSubTabContent — lazy-loaded VesselDetailTabs panel
+ * -------------------------------------------------------------------------- */
+function VesselSubTabContent({
+  vesselId,
+  fleetName,
+  fallbackName,
+  cached,
+}: {
+  vesselId: string;
+  fleetName: string;
+  fallbackName: string;
+  cached: VesselDetail | "loading" | "error" | undefined;
+}) {
+  if (cached === "loading" || cached === undefined) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/20 px-6 py-16 text-center">
+        <Search className="size-5 animate-pulse text-muted-foreground" />
+        <span className="text-[13px] text-muted-foreground">
+          Loading {fallbackName}…
+        </span>
+      </div>
+    );
+  }
+  if (cached === "error") {
+    return (
+      <div className="rounded-md border border-signal-magenta/30 bg-signal-magenta/8 p-4 text-[12px] text-signal-magenta">
+        Couldn&apos;t load <strong>{fallbackName}</strong>.{" "}
+        <Link
+          href={`/vessels/${vesselId}`}
+          className="font-semibold underline-offset-2 hover:underline"
+        >
+          Open it on its own page.
+        </Link>
+      </div>
+    );
+  }
+  const vessel = cached;
+  const subtitle = [
+    vessel.vesselType?.name ?? "Vessel",
+    `Built ${vessel.yearBuilt}`,
+    `IMO ${vessel.imo}`,
+    `${vessel.dwt.toLocaleString()} DWT`,
+  ].join(" · ");
+  return (
+    <VesselDetailTabs
+      vessel={vessel}
+      embedded
+      headerSlot={
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-3">
+          <div className="min-w-0 flex-1">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground"
+            >
+              <Link
+                href="/fleetspace"
+                className="transition-colors hover:text-foreground"
+              >
+                Fleets
+              </Link>
+              <span aria-hidden>/</span>
+              <span className="text-foreground/80">{fleetName}</span>
+              <span aria-hidden>/</span>
+              <span className="font-semibold text-foreground">{vessel.name}</span>
+            </nav>
+            <h2 className="mt-1 font-display text-[20px] font-extrabold leading-tight tracking-[-0.4px]">
+              {vessel.name}
+            </h2>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <VesselActionsMenu vesselId={vessel.id} vesselName={vessel.name} />
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+/* --------------------------------------------------------------------------
  * Small bits
  * -------------------------------------------------------------------------- */
 
@@ -842,7 +1275,6 @@ function FleetTab({
   badge,
   active = false,
   accent,
-  dot,
   onClick,
   onClose,
 }: {
@@ -850,42 +1282,39 @@ function FleetTab({
   badge: number;
   active?: boolean;
   accent: string;
-  dot?: string;
   onClick: () => void;
   onClose?: () => void;
 }) {
+  // `accent` is kept on the type for compatibility with future fleet
+  // colour theming, but the new folder-tab look only uses a single blue
+  // top stripe so we ignore the per-fleet hue for now.
+  void accent;
   return (
     <div
       className={cn(
-        "group relative -mb-px flex shrink-0 items-center gap-[7px] rounded-t-md px-3.5 pb-[9px] pt-2 text-[12px] font-semibold transition-colors",
+        // Folder-tab styling: rounded top corners only, white bg, 2px
+        // primary top border, gray side borders, NO bottom border, and
+        // -mb-px so the tab's white fill overlaps the content card's
+        // top border by 1px (hides the line where the active tab sits).
+        "group relative inline-flex shrink-0 items-center gap-1.5 rounded-t-sm px-4 py-2 text-[12px] font-semibold transition-colors",
         active
-          ? "border border-b-0 border-border bg-card text-foreground"
-          : "border border-transparent text-muted-foreground hover:bg-white/60 hover:text-foreground",
+          ? "-mb-px border border-b-0 border-border border-t-2 border-t-primary bg-card text-foreground"
+          : "border border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
       )}
     >
-      {active ? (
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-md",
-            accent,
-          )}
-        />
-      ) : null}
       <button
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className="flex items-center gap-[7px]"
+        className="flex items-center gap-1.5"
       >
-        {dot ? <span className={cn("inline-block size-[9px] rounded-full", dot)} /> : null}
-        {label}
+        <span>{label}</span>
         <span
           className={cn(
-            "rounded-full px-[7px] text-[11px] font-bold leading-[17px] tabular-nums",
+            "rounded-full px-1.5 text-[10px] font-bold leading-[16px] tabular-nums",
             active
               ? "bg-primary text-primary-foreground"
-              : "bg-black/[0.06] text-muted-foreground",
+              : "bg-muted text-muted-foreground",
           )}
         >
           {badge}

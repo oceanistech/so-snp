@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,9 @@ export default function RootLayout({
         )}
       >
         {children}
+        {/* Sonner toaster — mounted globally so any client component can
+            call `toast.info(...)` / `toast.error(...)` and see feedback. */}
+        <Toaster position="bottom-right" richColors closeButton />
       </body>
     </html>
   );

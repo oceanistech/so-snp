@@ -1312,8 +1312,8 @@ landed and what's still parked for later sprints:
 | S02-1.1 (tabs + active fleet) | **Done** | All-Fleets list + per-fleet openable tabs; URL `?created=<id>` carries the create-flow success banner. |
 | S02-2.1 (vessel table columns) | **Done (initial)** | Name, IMO, Type, Year, DWT, Env, FMV, On-Sale. Resale / Newbuild / ValCert columns parked until M06 valuation cert data lands. |
 | S02-2.2 (filters) | **Done** | Type / Year-Built bucket / name search, client-side over the loaded page. |
-| S02-3.1 (vessel detail tabs) | Pending | Awaits M06 Vessel Detail. |
-| S02-3.2 (context widget collapse) | Pending | Wired once S02-3.1 lands. |
+| S02-3.1 (vessel detail tabs) | **Done** | `/fleetspace` now renders a vessel-browser-bar inside the fleet view: "All Vessels (count)" + per-vessel openable sub-tabs (closeable). Clicking a vessel name in the fleet table opens that vessel as a sub-tab; content lazy-loads via `/api/vessels/[id]` and is cached client-side so re-opening is instant. |
+| S02-3.2 (context widget collapse) | **Done** | The fleet KPI row + filter bar belong to the All Vessels sub-tab and only render when it's active. Switching to a vessel sub-tab swaps in `VesselDetailTabs` (Main Information + the seven M06+ placeholder tabs) so the fleet context is implicitly hidden. |
 | S02-4.1 (Employment Timeline) | Pending | Needs Employment + Charterer model (M02 — planned for OT-176+). |
 | S02-4.2 (TC Expirations) | Pending | Same — needs Employment model. |
 | S02-5.1 (create + rename + delete) | **Create done** | Rename/delete come with the row-actions step. |
