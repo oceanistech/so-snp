@@ -436,6 +436,10 @@ model Fleet {
   visibility  FleetVisibility @default(PRIVATE)
   tag         String?
   ownerUserId String?
+  /// Free-text owner display name (person or company). Distinct from the
+  /// `ownerUserId` FK — that one links to the platform user who owns the
+  /// fleet for auth/visibility, while this string is what the UI shows.
+  ownerName   String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

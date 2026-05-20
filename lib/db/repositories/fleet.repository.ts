@@ -96,7 +96,7 @@ export class FleetRepository {
       },
       select: { slug: true },
     });
-    return new Set(rows.map((r) => r.slug));
+    return new Set(rows.map((r: { slug: string }) => r.slug));
   }
 
   /** Insert a new fleet row. The service is expected to have resolved
@@ -116,6 +116,144 @@ export class FleetRepository {
     return this.db.fleetVessel.createMany({
       data: vesselIds.map((vesselId) => ({ fleetId, vesselId, addedBy })),
       skipDuplicates: true,
+    });
+  }
+
+  /**
+   * Soft-delete a fleet: stamp `deletedAt = now` so it disappears from the
+   * default list-for-org query. The row is preserved for audit + restore.
+   * `updateMany` returns `{ count }` so callers can detect "fleet not found
+   * in this org / already deleted" via `count === 0`.
+   */
+  async softDelete(id: string, orgId: string) {
+    return this.db.fleet.updateMany({
+      where: { id, orgId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  /**
+   * Patch a fleet's editable fields. Like `softDelete` we use `updateMany`
+   * scoped to `(id, orgId, deletedAt: null)` so a caller from one org can't
+   * accidentally mutate another org's row; the `{ count }` tells the
+   * service whether the row was actually found.
+   */
+  async update(
+    id: string,
+    orgId: string,
+    data: Prisma.FleetUpdateInput,
+  ) {
+    return this.db.fleet.updateMany({
+      where: { id, orgId, deletedAt: null },
+      data,
+    });
+  }
+
+  /**
+   * Read everything `FleetService.duplicate` needs to build a copy:
+   * the source fleet's settings plus the ids of its currently attached
+   * (non-deleted) vessels.
+   */
+  async getForDuplicate(id: string, orgId: string) {
+    return this.db.fleet.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        type: true,
+        currency: true,
+        visibility: true,
+        tag: true,
+        fleetVessels: {
+          where: { deletedAt: null },
+          select: { vesselId: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Read everything the edit page needs: the fleet's current settings
+   * plus the ids of every currently-attached vessel so the checklist can
+   * pre-tick them. Scoped by slug (the URL form `/fleetspace/[slug]/edit`).
+   */
+  async getForEdit(slug: string, orgId: string) {
+    return this.db.fleet.findFirst({
+      where: { slug, orgId, deletedAt: null },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        type: true,
+        currency: true,
+        visibility: true,
+        tag: true,
+        ownerUserId: true,
+        ownerName: true,
+        fleetVessels: {
+          where: { deletedAt: null },
+          select: { vesselId: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Reconcile a fleet's vessel membership against `vesselIds`:
+   *   1. Soft-delete any currently-active FleetVessel row whose
+   *      `vesselId` isn't in the new set.
+   *   2. Insert a new FleetVessel row for every id in `vesselIds` that
+   *      doesn't already have an active row (preserving any soft-deleted
+   *      row from a previous detach — Prisma's `createMany` with
+   *      `skipDuplicates` won't dedupe against soft-deletes, so we do
+   *      the dedupe ourselves).
+   *
+   * Uses a transaction so the membership is atomic from the caller's
+   * point of view.
+   */
+  async replaceVessels(
+    fleetId: string,
+    vesselIds: string[],
+    addedBy: string | undefined,
+  ) {
+    const keep = new Set(vesselIds);
+    return this.db.$transaction(async (tx) => {
+      // Explicit row type so the callbacks below typecheck even when the
+      // Prisma client hasn't been regenerated (it falls back to `any` for
+      // `tx.fleetVessel.findMany` return otherwise).
+      type Row = { id: string; vesselId: string };
+      const current = (await tx.fleetVessel.findMany({
+        where: { fleetId, deletedAt: null },
+        select: { id: true, vesselId: true },
+      })) as Row[];
+      const currentIds = new Set(current.map((r: Row) => r.vesselId));
+
+      const toDetach = current
+        .filter((r: Row) => !keep.has(r.vesselId))
+        .map((r: Row) => r.id);
+      if (toDetach.length > 0) {
+        await tx.fleetVessel.updateMany({
+          where: { id: { in: toDetach } },
+          data: { deletedAt: new Date() },
+        });
+      }
+
+      const toAttach = vesselIds.filter((id: string) => !currentIds.has(id));
+      if (toAttach.length > 0) {
+        await tx.fleetVessel.createMany({
+          data: toAttach.map((vesselId: string) => ({
+            fleetId,
+            vesselId,
+            addedBy,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return { attached: toAttach.length, detached: toDetach.length };
     });
   }
 }

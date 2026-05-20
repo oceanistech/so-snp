@@ -1,16 +1,19 @@
 "use client";
 /**
- * CreateFleetForm — interactive island for /fleetspace/create.
+ * EditFleetForm — interactive island for `/fleetspace/[slug]/edit`.
  *
- * Three sections mirroring `html/create-fleet.html`:
- *   1. Fleet Details      — name*, type, currency, description, tag
- *   2. Add Vessels        — searchable checklist of the org's vessels
- *   3. Visibility & Access — owner (read-only), visibility, tag
+ * Visually identical to `CreateFleetForm` (same three sections, same
+ * field shells, same vessel checklist) — the only differences are:
+ *   1. Inputs are pre-filled with the fleet's current values.
+ *   2. The vessel checklist starts with the currently-attached vessels
+ *      ticked, and unticking detaches them on save.
+ *   3. The form posts to `editFleetAction` instead of `createFleetAction`.
+ *   4. A hidden `fleetId` input tells the action which row to update.
  *
- * Validation: shared FleetCreateSchema runs on both sides. Errors come back
- * from `createFleetAction` as `state.fieldErrors[name]: string[]` and are
- * rendered under each input. The submit button shows a pending state via
- * the `isPending` flag from `useActionState`.
+ * Validation runs the same shared `FleetUpdateSchema` (a `.partial()` of
+ * `FleetCreateSchema`) on both sides, and errors come back as
+ * `state.fieldErrors[name]: string[]` so per-field rendering is identical
+ * to the create form.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -21,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AttachableVessel } from "@/lib/services/vessel.service";
-import { createFleetAction } from "@/lib/actions/fleet.actions";
+import type { FleetEditPayload } from "@/lib/services/fleet.service";
+import { editFleetAction } from "@/lib/actions/fleet.actions";
 import {
   INITIAL_FLEET_FORM_STATE,
   type FleetFormState,
@@ -36,12 +40,8 @@ const FLEET_TYPES = [
   "Offshore",
 ] as const;
 
-/**
- * Map a Fleet Type select value to the corresponding VesselType root the
- * Add-Vessels checklist should filter by. `Mixed` returns `null` →
- * filtering is disabled (show every vessel). The other values map onto
- * the `VesselListItem["typeRoot"]` literal union ("BULK", "TANKER", …).
- */
+/** Map Fleet Type → VesselType root used by the Add-Vessels filter.
+ *  "Mixed" disables filtering; the rest constrain to a single typeRoot. */
 const FLEET_TYPE_TO_VESSEL_ROOT: Record<
   (typeof FLEET_TYPES)[number],
   string | null
@@ -71,30 +71,40 @@ const TYPE_TAG: Record<string, string> = {
   OTHER: "bg-muted text-muted-foreground",
 };
 
-export function CreateFleetForm({
+export function EditFleetForm({
+  fleet,
   attachableVessels,
   ownerLabel,
 }: {
+  fleet: FleetEditPayload;
   attachableVessels: AttachableVessel[];
   ownerLabel: string;
 }) {
   const [state, formAction, isPending] = useActionState<FleetFormState, FormData>(
-    createFleetAction,
+    editFleetAction,
     INITIAL_FLEET_FORM_STATE,
   );
   const fieldErrors = !state.ok ? state.fieldErrors : {};
   const formError = !state.ok ? state.formError : null;
 
   const [vesselFilter, setVesselFilter] = React.useState("");
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  /**
-   * Selected fleet type — mirrors the Fleet Type select. Changing this
-   * narrows the vessel checklist to vessels whose `typeRoot` matches.
-   * "Mixed" disables the type filter (shows every attachable vessel).
-   */
+  // Pre-tick the currently-attached vessels so the user sees the existing
+  // membership and can deselect to detach.
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(fleet.vesselIds),
+  );
+  // Mirror the Fleet Type select so changing it filters the checklist.
   const [fleetType, setFleetType] = React.useState<
     (typeof FLEET_TYPES)[number]
-  >("Mixed");
+  >(
+    // The DB value may not be in our enum (older fleets / migrated data),
+    // so default to "Mixed" — that disables type filtering on the
+    // checklist without losing the user's saved choice (the select
+    // option still reflects whatever the DB has).
+    (FLEET_TYPES as readonly string[]).includes(fleet.type)
+      ? (fleet.type as (typeof FLEET_TYPES)[number])
+      : "Mixed",
+  );
 
   const filteredVessels = React.useMemo(() => {
     const requiredRoot = FLEET_TYPE_TO_VESSEL_ROOT[fleetType];
@@ -102,7 +112,6 @@ export function CreateFleetForm({
     return attachableVessels.filter((v) => {
       // Type filter — only when the Fleet Type is a specific category.
       if (requiredRoot != null && v.typeRoot !== requiredRoot) return false;
-      // Text filter — name / IMO / typeLabel / year.
       if (q === "") return true;
       return (
         v.name.toLowerCase().includes(q) ||
@@ -127,29 +136,34 @@ export function CreateFleetForm({
       <AppPageHeader
         breadcrumb={[
           { label: "Fleets", href: "/fleetspace" },
-          { label: "Create Fleet" },
+          { label: fleet.name, href: `/fleetspace?fleet=${fleet.id}` },
+          { label: "Edit" },
         ]}
-        title="Create New Fleet"
-        subtitle="Set up a fleet group and assign vessels to start tracking portfolio performance"
+        title={`Edit ${fleet.name}`}
+        subtitle="Update fleet settings, then save to commit changes"
         actions={
           <>
             <Button asChild variant="secondary">
               <Link href="/fleetspace">Cancel</Link>
             </Button>
-            <Button form="create-fleet-form" type="submit" disabled={isPending}>
+            <Button form="edit-fleet-form" type="submit" disabled={isPending}>
               <Check className="size-3.5" />
-              {isPending ? "Creating…" : "Create Fleet"}
+              {isPending ? "Saving…" : "Save Changes"}
             </Button>
           </>
         }
       />
 
       <form
-        id="create-fleet-form"
+        id="edit-fleet-form"
         action={formAction}
         className="flex flex-col gap-6 p-8"
         noValidate
       >
+        {/* Hidden id — tells the server action which row to update.
+            Cancel works without a value (just navigates away). */}
+        <input type="hidden" name="fleetId" value={fleet.id} />
+
         {formError ? (
           <div
             role="alert"
@@ -174,10 +188,10 @@ export function CreateFleetForm({
                 <input
                   name="name"
                   type="text"
+                  defaultValue={fleet.name}
                   placeholder="e.g. Fleet Gamma, Asia-Pacific Fleet…"
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
                   aria-invalid={!!fieldErrors.name}
-                  aria-describedby={fieldErrors.name ? "name-err" : undefined}
                 />
               </FormField>
               <FormField label="Fleet Type" error={fieldErrors.type?.[0]}>
@@ -197,7 +211,7 @@ export function CreateFleetForm({
               <FormField label="Reporting Currency" error={fieldErrors.currency?.[0]}>
                 <select
                   name="currency"
-                  defaultValue="USD"
+                  defaultValue={fleet.currency}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {CURRENCIES.map((c) => (
@@ -210,6 +224,7 @@ export function CreateFleetForm({
               <textarea
                 name="description"
                 rows={3}
+                defaultValue={fleet.description ?? ""}
                 placeholder="Describe this fleet's purpose, strategy, or scope (e.g. dry bulk vessels acquired post-2018 for long-term TC strategy)…"
                 className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               />
@@ -220,7 +235,7 @@ export function CreateFleetForm({
         {/* ── Section 2: Add Vessels ───────────────────────────────────── */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <SectionTitle step={2}>Add Vessels</SectionTitle>
+            <SectionTitle step={2}>Vessels in this Fleet</SectionTitle>
             <div className="flex items-center gap-2">
               {selectedIds.size > 0 ? (
                 <span
@@ -240,8 +255,9 @@ export function CreateFleetForm({
           </CardHeader>
           <div className="flex flex-col gap-3 p-6">
             <p className="text-[13px] text-muted-foreground">
-              Select vessels from your existing roster to include in this fleet.
-              You can also add vessels later.
+              Tick the vessels that should belong to this fleet. Unticking
+              detaches a vessel on save — the vessel record itself is not
+              affected.
             </p>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -337,14 +353,14 @@ export function CreateFleetForm({
           </CardHeader>
           <div className="grid gap-4 p-6 md:grid-cols-3">
             <FormField label="Owner" error={fieldErrors.ownerName?.[0]}>
-              {/* Free-text owner display name — person or company.
-                  Pre-filled with the current user's email so a freshly-
-                  created fleet always has something to render in the Owner
-                  column; the user can overwrite it (e.g. "Cardiff Marine"). */}
+              {/* Free-text owner display name — person or company. Defaults
+                  to the stored `ownerName` if the fleet was already given
+                  one, otherwise the session's email so older fleets still
+                  show something. Fully editable. */}
               <input
                 name="ownerName"
                 type="text"
-                defaultValue={ownerLabel}
+                defaultValue={fleet.ownerName ?? ownerLabel}
                 placeholder="e.g. Cardiff Marine"
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               />
@@ -352,7 +368,7 @@ export function CreateFleetForm({
             <FormField label="Visibility" error={fieldErrors.visibility?.[0]}>
               <select
                 name="visibility"
-                defaultValue="PRIVATE"
+                defaultValue={fleet.visibility}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {VISIBILITY_OPTIONS.map((o) => (
@@ -366,6 +382,7 @@ export function CreateFleetForm({
               <input
                 name="tag"
                 type="text"
+                defaultValue={fleet.tag ?? ""}
                 placeholder="e.g. 2026 Expansion, Q1 Review…"
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring"
               />
@@ -376,7 +393,7 @@ export function CreateFleetForm({
         <div className="flex gap-2 pb-6">
           <Button type="submit" disabled={isPending}>
             <Check className="size-3.5" />
-            {isPending ? "Creating…" : "Create Fleet"}
+            {isPending ? "Saving…" : "Save Changes"}
           </Button>
           <Button asChild variant="secondary">
             <Link href="/fleetspace">Cancel</Link>
@@ -428,7 +445,7 @@ function SectionTitle({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 text-[15px] font-bold">
+    <div className="flex items-center gap-2 text-[14px] font-bold leading-snug">
       <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-extrabold text-primary-foreground">
         {step}
       </span>

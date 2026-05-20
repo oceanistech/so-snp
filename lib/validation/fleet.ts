@@ -42,6 +42,16 @@ export const FleetCreateSchema = z.object({
   tag: emptyStringToUndefined(z.string().max(40).optional()),
   vesselIds: z.array(cuidSchema).default([]),
   ownerUserId: cuidSchema.optional(),
+  /** Free-text owner display name — person or company. Optional; the
+   *  UI defaults this to the current user's email so a fresh fleet
+   *  always has something to render in the Owner column. */
+  ownerName: emptyStringToUndefined(
+    z
+      .string()
+      .trim()
+      .max(120, "Owner name cannot exceed 120 characters")
+      .optional(),
+  ),
 });
 
 export type FleetCreateInput = z.infer<typeof FleetCreateSchema>;

@@ -25,7 +25,6 @@ import {
   CheckCircle2,
   FileText,
   Info,
-  MoreHorizontal,
   Plus,
   Search,
   X,
@@ -40,6 +39,8 @@ import type { FleetSummary } from "@/lib/services/fleet.service";
 import type { VesselListItem, VesselDetail } from "@/lib/services/vessel.service";
 import { VesselDetailTabs } from "@/app/(app)/vessels/[imo]/vessel-detail-tabs";
 import { VesselActionsMenu } from "@/app/(app)/vessels/[imo]/vessel-actions-menu";
+import { FleetActionsMenu } from "./fleet-actions-menu";
+import { FleetDetailActionsMenu } from "./fleet-detail-actions-menu";
 
 /* --------------------------------------------------------------------------
  * Visual helpers — match the prototype's type tag and dot colour palette.
@@ -520,6 +521,7 @@ export function FleetspaceClient({
                 onOpenVessel={(vesselId) =>
                   openVesselTab(activeFleet.id, vesselId)
                 }
+                onRemoved={() => closeFleet(activeFleet.id)}
               />
             </div>
           ) : (
@@ -712,11 +714,40 @@ function AllFleetsView({
   onOpenFleet: (id: string) => void;
 }) {
   const [search, setSearch] = React.useState("");
+  /**
+   * Pagination state. Defaults to 5 fleets per page (matches the
+   * prototype's `.pagination` block + the user's expected initial
+   * load). Per-page options are 5/10/25 — switching any of these
+   * resets to page 1 so the user never sees a phantom empty page.
+   */
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(5);
+
   const visible = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (q === "") return fleets;
     return fleets.filter((f) => f.name.toLowerCase().includes(q));
   }, [fleets, search]);
+
+  // Compute how many pages we have, then clamp `page` back to a valid
+  // value when the underlying dataset shrinks (search narrows the rows,
+  // a fleet is deleted, per-page increases past the row count, etc.).
+  const totalPages = Math.max(1, Math.ceil(visible.length / perPage));
+  React.useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  // Slice the visible rows down to the current page's window.
+  const paginated = React.useMemo(
+    () => visible.slice((page - 1) * perPage, page * perPage),
+    [visible, page, perPage],
+  );
+
+  // Reset to page 1 whenever the search query or per-page changes so
+  // the user always lands on the first page of the new result set.
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, perPage]);
 
   if (fleets.length === 0) {
     return (
@@ -768,8 +799,11 @@ function AllFleetsView({
             </tr>
           </thead>
           <tbody>
-            {visible.map((f, idx) => {
-              const accent = accentFor(idx);
+            {paginated.map((f, idx) => {
+              // Use the global (across-all-pages) row index so the
+              // tab-accent colours stay consistent for a given fleet as
+              // the user pages through the table.
+              const accent = accentFor((page - 1) * perPage + idx);
               return (
                 <tr
                   key={f.id}
@@ -814,22 +848,14 @@ function AllFleetsView({
                     {fmtCreated(f.createdAt)}
                   </td>
                   <td className="px-4 py-3">
+                    {/* The "Open" button was removed in OT-175 — the prototype
+                        only carries a single "More" trigger here, and View
+                        Fleet inside the dropdown does the same thing. */}
                     <div
-                      className="flex justify-end gap-1.5"
+                      className="flex justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Button size="sm" onClick={() => onOpenFleet(f.id)}>
-                        Open
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-[26px]"
-                        title="Fleet options"
-                        aria-label="Fleet options"
-                      >
-                        <MoreHorizontal className="size-3.5" />
-                      </Button>
+                      <FleetActionsMenu fleet={f} onView={onOpenFleet} />
                     </div>
                   </td>
                 </tr>
@@ -851,12 +877,20 @@ function AllFleetsView({
         </table>
 
         <TablePagination
-          page={1}
-          totalPages={1}
+          page={page}
+          totalPages={totalPages}
           totalRows={visible.length}
-          perPage={5}
+          perPage={perPage}
           perPageOptions={[5, 10, 25]}
           rowLabel="fleet"
+          onPageChange={(next) => setPage(next)}
+          onPerPageChange={(next) => {
+            setPerPage(next);
+            // The dedicated useEffect already snaps page back to 1, but
+            // doing it inline avoids the brief one-frame flash where
+            // the table renders an old slice on the new per-page count.
+            setPage(1);
+          }}
         />
       </Card>
     </>
@@ -877,10 +911,15 @@ function FleetDetailView({
   fleet,
   vessels,
   onOpenVessel,
+  onRemoved,
 }: {
   fleet: FleetSummary;
   vessels: VesselListItem[];
   onOpenVessel: (vesselId: string) => void;
+  /** Invoked after the fleet is successfully soft-deleted from this
+   *  tab's "Remove Fleet" action — the parent uses this to drop the
+   *  fleet's tab from its open-tabs list. */
+  onRemoved: () => void;
 }) {
   const [filterType, setFilterType] = React.useState<string>("");
   const [filterYear, setFilterYear] = React.useState<string>("");
@@ -957,9 +996,12 @@ function FleetDetailView({
               {fleet.description ?? "No description"}
             </p>
           </div>
-          <Button size="icon" variant="ghost" className="size-7" aria-label="Fleet options">
-            <MoreHorizontal className="size-3.5" />
-          </Button>
+          <FleetDetailActionsMenu
+            fleetId={fleet.id}
+            fleetName={fleet.name}
+            fleetSlug={fleet.slug}
+            onRemoved={onRemoved}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full whitespace-nowrap text-[12px]">
