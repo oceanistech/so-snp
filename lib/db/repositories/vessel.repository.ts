@@ -128,22 +128,76 @@ export class VesselRepository {
   }
 
   /**
-   * Insert a vessel and (optionally) attach it to a fleet in one
-   * transaction. Returning the created vessel id so the action can
-   * redirect to `/vessels/[id]`.
+   * Insert a vessel + its optional sub-records in a single transaction:
+   *   • the Vessel row itself
+   *   • an optional FleetVessel join (when the form picks a fleet)
+   *   • an optional VesselOrderBookEntry (1:1, newbuilds only)
+   *   • zero or more VesselSanctionEntry rows
+   * Returns the created vessel so the action can redirect to /vessels/[id].
    */
   async create(
     data: Prisma.VesselUncheckedCreateInput,
-    fleetId: string | undefined,
-    addedBy: string | undefined,
+    extras: {
+      fleetId?: string;
+      addedBy?: string;
+      orderBook?: {
+        status?:
+          | "ON_ORDER"
+          | "UNDER_CONSTRUCTION"
+          | "LAUNCHED"
+          | "DELIVERED"
+          | "CANCELLED";
+        orderDate?: Date;
+        constructionStartDate?: Date;
+        launchDate?: Date;
+        scheduledDeliveryDate?: Date;
+        cancelledDate?: Date;
+      };
+      sanctions?: {
+        authority: string;
+        program?: string;
+        startDate?: Date;
+        endDate?: Date;
+        description?: string;
+      }[];
+    },
   ) {
     return this.db.$transaction(async (tx) => {
       const vessel = await tx.vessel.create({ data });
-      if (fleetId) {
+
+      if (extras.fleetId) {
         await tx.fleetVessel.create({
-          data: { fleetId, vesselId: vessel.id, addedBy },
+          data: {
+            fleetId: extras.fleetId,
+            vesselId: vessel.id,
+            addedBy: extras.addedBy,
+          },
         });
       }
+
+      if (extras.orderBook) {
+        const ob = extras.orderBook;
+        // Skip insert if every field is empty/undefined.
+        const hasAny =
+          ob.status ||
+          ob.orderDate ||
+          ob.constructionStartDate ||
+          ob.launchDate ||
+          ob.scheduledDeliveryDate ||
+          ob.cancelledDate;
+        if (hasAny) {
+          await tx.vesselOrderBookEntry.create({
+            data: { vesselId: vessel.id, ...ob },
+          });
+        }
+      }
+
+      if (extras.sanctions && extras.sanctions.length > 0) {
+        await tx.vesselSanctionEntry.createMany({
+          data: extras.sanctions.map((s) => ({ vesselId: vessel.id, ...s })),
+        });
+      }
+
       return vessel;
     });
   }

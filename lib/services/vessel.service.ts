@@ -165,17 +165,24 @@ export class VesselService {
     const dupe = await this.repo.findByImoAndName(orgId, imo, name);
     if (dupe) throw new VesselConflictError(imo, name);
 
-    const { fleetId, ...rest } = input;
+    // Split off the related sub-records (Order Book is 1:1, Sanctions are
+    // 1-many). They get written by the repository inside the same txn as
+    // the parent Vessel row.
+    const { fleetId, orderBook, sanctions, ...vesselFields } = input;
     return this.repo.create(
       {
         orgId,
         createdBy,
-        ...rest,
+        ...vesselFields,
         name,
         imo,
       },
-      fleetId ?? undefined,
-      createdBy,
+      {
+        fleetId: fleetId ?? undefined,
+        addedBy: createdBy,
+        orderBook,
+        sanctions,
+      },
     );
   }
 
@@ -311,42 +318,179 @@ function certificateStatus(expiresAt: Date | null): "ok" | "warn" | "expired" {
  * `undefined`; the repository / Prisma fills defaults.
  */
 export type CreateVesselInput = {
+  // 1. Identification
   imo: string;
   name: string;
   mmsi?: string;
   callSign?: string;
-  vesselTypeId: string;
-  yearBuilt: number;
-  dwt: number;
-  grt?: number;
-  nrt?: number;
-  loaM?: number;
-  beamM?: number;
-  draftM?: number;
-  serviceSpeedKn?: number;
   flagCountryId?: string;
+  flagCode?: string;
   flagOther?: string;
   portOfRegistryId?: string;
   portOfRegistryOther?: string;
-  shipyardId?: string;
-  shipyardOther?: string;
   classSocietyId?: string;
   classSocietyOther?: string;
+  classRenewalDate?: Date;
+
+  // 2. Type & Classification
+  vesselTypeId: string;
+  builtForTrade?: string;
+  currentTrade?: string;
+  designModel?: string;
+  iceClass?: string;
+  propulsionType?: string;
+  cleanDirtyWilling?: boolean;
+
+  // 3. Build & Delivery
+  yearBuilt: number;
+  builtCountry?: string;
+  shipyardId?: string;
+  shipyardOther?: string;
+  yardNumber?: string;
+  deliveryDate?: Date;
+  scrappedDate?: Date;
+
+  // 4. Principal Dimensions
+  dwt: number;
+  loaM?: number;
+  beamM?: number;
+  mouldedDepthM?: number;
+  draftM?: number;
+  airDraughtM?: number;
+  lightshipT?: number;
+  summerTpc?: number;
+
+  // 5. Tonnage
+  grt?: number;
+  reducedGrt?: number;
+  nrt?: number;
+  panamaCanalNrt?: number;
+  suezCanalNrt?: number;
+
+  // 6. Cargo Capacity
+  cubicSizeM3?: number;
+  grainCapacityM3?: number;
+  baleCapacityM3?: number;
+  teu?: number;
+  teuAt14t?: number;
+  deckTeu?: number;
+  underDeckTeu?: number;
+  reefers?: number;
+
+  // 7. Holds, Hatches, Cranes & Grabs
+  numHolds?: number;
+  numHatches?: number;
+  numCranes?: number;
+  numGrabs?: number;
+  cranesMaxOutreachM?: number;
+  cranesMaxLiftingT?: number;
+  holdDetails?: string;
+  hatchDetails?: string;
+  craneDetails?: string;
+  grabDetails?: string;
+  isGeared?: boolean;
+  grabsFitted?: boolean;
+  boxShapedHolds?: boolean;
+  openHatch?: boolean;
+  australianHoldLadder?: boolean;
+  logFitted?: boolean;
+  a60Bulkhead?: boolean;
+  co2Fitted?: boolean;
+
+  // 8. Parallel Body Length
+  parallelBodyLadenM?: number;
+  parallelBodyBallastM?: number;
+  parallelBodyEmptyM?: number;
+
+  // 9. Manifold (tanker)
+  bowToCentreManifoldM?: number;
+  waterlineToManifoldM?: number;
+  deckToCentreManifoldM?: number;
+  railToCentreManifoldM?: number;
+
+  // 10. Tanker Equipment
+  imoType?: "1" | "2" | "3";
+  inertGasSystem?: boolean;
+  crudeOilWashing?: boolean;
+  heatingCoils?: boolean;
+  ststCoating?: number;
+  epoxyCoating?: number;
+  zincCoating?: number;
+  marinelineCoating?: number;
+  interlineCoating?: number;
+
+  // 11. Bow Equipment
+  numBowChainStoppers?: number;
+  numBowThrusters?: number;
+  bowChainStopperDetails?: string;
+  bowChainStoppersFitted?: boolean;
+
+  // 12. Main Engine
   engineModelId?: string;
   engineModelOther?: string;
+  engineManufacturer?: string;
+  enginePowerKw?: number;
+  engineRpm?: number;
+  mewisDuct?: string;
+  serviceSpeedKn?: number;
+
+  // 13. Gas Carrier
+  gasContainmentType?: string;
+  minTemperatureC?: number;
+  maxPressureBar?: number;
+  carriesAmmonia?: boolean;
+  carriesVcm?: boolean;
+  carriesEthylene?: boolean;
+
+  // 14. Environmental & Compliance
+  envScore?: EnvScore;
+  ghgRating?: EnvScore;
+  scrubbersInstalledDate?: Date;
+  ballastWaterTreatmentSystem?: boolean;
+  neoPanamaLocks?: boolean;
+  sternLine?: boolean;
   nextSpecialSurvey?: Date;
+
+  // 15. Operators & Owners
+  commercialOperator?: string;
+  beneficialOwner?: string;
+
+  // 16. Commercial / financial
   acquisitionCost?: number;
   acquisitionDate?: Date;
   currentFmv?: number;
   outstandingLoan?: number;
   currency?: Currency;
+
+  // 17. Status / sale / misc
   lifecycleStatus?: VesselLifecycleStatus;
   employmentStatus?: EmploymentStatus;
-  envScore?: EnvScore;
   isOnSale?: boolean;
   onSaleAt?: Date;
   notes?: string;
   fleetId?: string;
+
+  // 18. Related sub-records
+  orderBook?: {
+    status?:
+      | "ON_ORDER"
+      | "UNDER_CONSTRUCTION"
+      | "LAUNCHED"
+      | "DELIVERED"
+      | "CANCELLED";
+    orderDate?: Date;
+    constructionStartDate?: Date;
+    launchDate?: Date;
+    scheduledDeliveryDate?: Date;
+    cancelledDate?: Date;
+  };
+  sanctions?: {
+    authority: string;
+    program?: string;
+    startDate?: Date;
+    endDate?: Date;
+    description?: string;
+  }[];
 };
 
 type VesselDetailRow = {

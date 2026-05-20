@@ -1387,6 +1387,32 @@ client-side. The hidden `vesselTypeId` input that posts to the action is
 always the leaf id (subtype) if available, otherwise the parent id. The
 parent/subtype dataset is fetched once via `ReferenceService.loadAddVesselData()`.
 
+**Schema expansion (OT-175 batch 12).** The Add Vessel form was rebuilt to
+mirror the latest `html/add-vessel.html` prototype, adding ~80 new
+nullable columns to the Vessel model across 17 sections — Vessel
+Identification extras (flagCode, classRenewalDate), Vessel Type &
+Classification (builtForTrade, currentTrade, designModel, iceClass,
+propulsionType, cleanDirtyWilling), Build & Delivery (builtCountry,
+yardNumber, deliveryDate, scrappedDate), Principal Dimensions extras
+(mouldedDepthM, airDraughtM, lightshipT, summerTpc), Tonnage (reducedGrt,
+panamaCanalNrt, suezCanalNrt), Cargo Capacity (cubicSizeM3, grainCapacityM3,
+baleCapacityM3, teu/teuAt14t/deckTeu/underDeckTeu, reefers), Holds /
+Hatches / Cranes & Grabs (counts + 4 text-details + 8 equipment-fitted
+booleans), Parallel Body Length (laden/ballast/empty), Manifold (4
+tanker dimensions), Tanker Equipment (imoType, 3 system booleans, 5
+coating ints), Bow Equipment (chain stoppers + thrusters), Main Engine
+(manufacturer, powerKw, rpm, mewisDuct), Gas Carrier (containment, temp,
+pressure, 3 cargo booleans), Environmental & Compliance (ghgRating,
+scrubbersInstalledDate, BWTS, neoPanamaLocks, sternLine), Operators &
+Owners (commercialOperator, beneficialOwner). Plus two new related
+tables: `VesselOrderBookEntry` (1:1, 5 dates + status enum for
+newbuilds) and `VesselSanctionEntry` (many-per-vessel: authority,
+program, dates, description). All new fields are optional/nullable so
+existing forms / API consumers stay backwards-compatible. Vessel
+detail-page projection is unchanged in this batch — the new fields are
+returned by the repository but not yet rendered until the next UI
+iteration.
+
 **Vessel detail page.** `/vessels/[imo]/page.tsx` now treats its dynamic
 segment as a Prisma CUID (not an IMO) per ADR-0002. The directory name is
 preserved to avoid a permission-gated rename; a follow-up housekeeping step

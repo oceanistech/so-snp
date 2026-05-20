@@ -144,12 +144,18 @@ describe("VesselService.listAttachableForOrg", () => {
  * -------------------------------------------------------------------------- */
 
 function makeRepoWithDupe(existing: { imo: string; name: string } | null) {
-  // Type the full 3-arg signature so `create.mock.calls[0]` is a 3-tuple.
+  // The repository's `create` is now `(data, extras)` where `extras`
+  // bundles fleetId/addedBy/orderBook/sanctions. Type the signature so
+  // `create.mock.calls[0]` is a 2-tuple.
   const create = vi.fn(
     async (
       data: Record<string, unknown>,
-      _fleetId: string | undefined,
-      _addedBy: string | undefined,
+      _extras: {
+        fleetId?: string;
+        addedBy?: string;
+        orderBook?: unknown;
+        sanctions?: unknown;
+      },
     ) => ({ id: "vessel-new", ...data }),
   );
   return {
@@ -188,7 +194,7 @@ describe("VesselService.create — happy path", () => {
       "user_1",
     );
     expect(create).toHaveBeenCalledOnce();
-    const [data, fleetId, addedBy] = create.mock.calls[0]!;
+    const [data, extras] = create.mock.calls[0]!;
     expect(data).toMatchObject({
       orgId: "org_1",
       createdBy: "user_1",
@@ -199,25 +205,38 @@ describe("VesselService.create — happy path", () => {
       dwt: 82_000,
       flagCountryId: "country_1",
     });
-    expect(fleetId).toBeUndefined();
-    expect(addedBy).toBe("user_1");
+    expect(extras.fleetId).toBeUndefined();
+    expect(extras.addedBy).toBe("user_1");
     expect(vessel.id).toBe("vessel-new");
   });
 
-  it("forwards fleetId so the repo attaches the vessel in the same txn", async () => {
+  it("forwards fleetId via extras so the repo attaches the vessel in the same txn", async () => {
     const { repo, create } = makeRepoWithDupe(null);
     const svc = new VesselService(repo);
     await svc.create("org_1", { ...validInput, fleetId: "fleet_x" }, "user_1");
-    const [_data, fleetId] = create.mock.calls[0]!;
-    expect(fleetId).toBe("fleet_x");
+    const [_data, extras] = create.mock.calls[0]!;
+    expect(extras.fleetId).toBe("fleet_x");
   });
 
-  it("strips fleetId from the vessel payload (it lives on FleetVessel)", async () => {
+  it("strips fleetId/orderBook/sanctions from the vessel payload", async () => {
     const { repo, create } = makeRepoWithDupe(null);
     const svc = new VesselService(repo);
-    await svc.create("org_1", { ...validInput, fleetId: "fleet_x" }, "user_1");
-    const [data] = create.mock.calls[0]!;
+    await svc.create(
+      "org_1",
+      {
+        ...validInput,
+        fleetId: "fleet_x",
+        orderBook: { status: "ON_ORDER" },
+        sanctions: [{ authority: "OFAC" }],
+      },
+      "user_1",
+    );
+    const [data, extras] = create.mock.calls[0]!;
     expect(data).not.toHaveProperty("fleetId");
+    expect(data).not.toHaveProperty("orderBook");
+    expect(data).not.toHaveProperty("sanctions");
+    expect(extras.orderBook).toEqual({ status: "ON_ORDER" });
+    expect(extras.sanctions).toEqual([{ authority: "OFAC" }]);
   });
 });
 

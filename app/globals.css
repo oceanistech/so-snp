@@ -37,7 +37,10 @@
     --secondary-foreground: 225 14% 21%;
 
     --muted: 210 22% 94%;
-    --muted-foreground: 220 9% 46%;
+    /* Matches prototype's --color-text-muted = #A0ABB2 (var(--gray-400) in
+       signal-design-system.css). Used for form labels, card subtitles,
+       helper text, breadcrumbs, etc. */
+    --muted-foreground: 203 10% 66%;
 
     --accent: 188 100% 56%;               /* #1FD6FF */
     --accent-foreground: 225 14% 21%;

@@ -11,7 +11,7 @@ CREATE TYPE "PendingReferenceStatus" AS ENUM ('PENDING', 'MERGED', 'REJECTED');
 CREATE TYPE "FleetVisibility" AS ENUM ('PRIVATE', 'TEAM', 'READ_ONLY');
 
 -- CreateEnum
-CREATE TYPE "VesselLifecycleStatus" AS ENUM ('ACTIVE', 'LAID_UP', 'DRYDOCK', 'SOLD', 'SCRAPPED');
+CREATE TYPE "VesselLifecycleStatus" AS ENUM ('DRAFT', 'ACTIVE', 'LAID_UP', 'DRYDOCK', 'SOLD', 'SCRAPPED');
 
 -- CreateEnum
 CREATE TYPE "EmploymentStatus" AS ENUM ('CURRENT_EARNINGS', 'HISTORIC_EARNINGS', 'FUTURE_EARNINGS');
@@ -21,6 +21,9 @@ CREATE TYPE "EnvScore" AS ENUM ('A', 'B', 'C', 'D', 'E');
 
 -- CreateEnum
 CREATE TYPE "Currency" AS ENUM ('USD', 'EUR', 'GBP', 'JPY', 'CNY');
+
+-- CreateEnum
+CREATE TYPE "VesselOrderBookStatus" AS ENUM ('ON_ORDER', 'UNDER_CONSTRUCTION', 'LAUNCHED', 'DELIVERED', 'CANCELLED');
 
 -- CreateTable
 CREATE TABLE "countries" (
@@ -182,25 +185,108 @@ CREATE TABLE "vessels" (
     "mmsi" TEXT,
     "callSign" TEXT,
     "flagCountryId" TEXT,
+    "flagCode" TEXT,
     "portOfRegistryId" TEXT,
-    "vesselTypeId" TEXT NOT NULL,
-    "shipyardId" TEXT,
     "classSocietyId" TEXT,
-    "engineModelId" TEXT,
+    "classRenewalDate" TIMESTAMP(3),
     "flagOther" TEXT,
     "portOfRegistryOther" TEXT,
-    "shipyardOther" TEXT,
     "classSocietyOther" TEXT,
-    "engineModelOther" TEXT,
+    "vesselTypeId" TEXT NOT NULL,
+    "builtForTrade" TEXT,
+    "currentTrade" TEXT,
+    "designModel" TEXT,
+    "iceClass" TEXT,
+    "propulsionType" TEXT,
+    "cleanDirtyWilling" BOOLEAN NOT NULL DEFAULT false,
     "yearBuilt" INTEGER NOT NULL,
-    "nextSpecialSurvey" TIMESTAMP(3),
+    "builtCountry" TEXT,
+    "shipyardId" TEXT,
+    "shipyardOther" TEXT,
+    "yardNumber" TEXT,
+    "deliveryDate" TIMESTAMP(3),
+    "scrappedDate" TIMESTAMP(3),
     "dwt" INTEGER NOT NULL,
-    "grt" INTEGER,
-    "nrt" INTEGER,
     "loaM" DECIMAL(6,2),
     "beamM" DECIMAL(6,2),
+    "mouldedDepthM" DECIMAL(6,2),
     "draftM" DECIMAL(6,2),
+    "airDraughtM" DECIMAL(6,2),
+    "lightshipT" INTEGER,
+    "summerTpc" DECIMAL(8,2),
+    "grt" INTEGER,
+    "reducedGrt" INTEGER,
+    "nrt" INTEGER,
+    "panamaCanalNrt" INTEGER,
+    "suezCanalNrt" INTEGER,
+    "cubicSizeM3" INTEGER,
+    "grainCapacityM3" INTEGER,
+    "baleCapacityM3" INTEGER,
+    "teu" INTEGER,
+    "teuAt14t" INTEGER,
+    "deckTeu" INTEGER,
+    "underDeckTeu" INTEGER,
+    "reefers" INTEGER,
+    "numHolds" INTEGER,
+    "numHatches" INTEGER,
+    "numCranes" INTEGER,
+    "numGrabs" INTEGER,
+    "cranesMaxOutreachM" DECIMAL(6,2),
+    "cranesMaxLiftingT" INTEGER,
+    "holdDetails" TEXT,
+    "hatchDetails" TEXT,
+    "craneDetails" TEXT,
+    "grabDetails" TEXT,
+    "isGeared" BOOLEAN NOT NULL DEFAULT false,
+    "grabsFitted" BOOLEAN NOT NULL DEFAULT false,
+    "boxShapedHolds" BOOLEAN NOT NULL DEFAULT false,
+    "openHatch" BOOLEAN NOT NULL DEFAULT false,
+    "australianHoldLadder" BOOLEAN NOT NULL DEFAULT false,
+    "logFitted" BOOLEAN NOT NULL DEFAULT false,
+    "a60Bulkhead" BOOLEAN NOT NULL DEFAULT false,
+    "co2Fitted" BOOLEAN NOT NULL DEFAULT false,
+    "parallelBodyLadenM" DECIMAL(6,2),
+    "parallelBodyBallastM" DECIMAL(6,2),
+    "parallelBodyEmptyM" DECIMAL(6,2),
+    "bowToCentreManifoldM" DECIMAL(6,2),
+    "waterlineToManifoldM" DECIMAL(6,2),
+    "deckToCentreManifoldM" DECIMAL(6,2),
+    "railToCentreManifoldM" DECIMAL(6,2),
+    "imoType" TEXT,
+    "inertGasSystem" BOOLEAN NOT NULL DEFAULT false,
+    "crudeOilWashing" BOOLEAN NOT NULL DEFAULT false,
+    "heatingCoils" BOOLEAN NOT NULL DEFAULT false,
+    "ststCoating" INTEGER,
+    "epoxyCoating" INTEGER,
+    "zincCoating" INTEGER,
+    "marinelineCoating" INTEGER,
+    "interlineCoating" INTEGER,
+    "numBowChainStoppers" INTEGER,
+    "numBowThrusters" INTEGER,
+    "bowChainStopperDetails" TEXT,
+    "bowChainStoppersFitted" BOOLEAN NOT NULL DEFAULT false,
+    "engineModelId" TEXT,
+    "engineModelOther" TEXT,
+    "engineManufacturer" TEXT,
+    "enginePowerKw" INTEGER,
+    "engineRpm" INTEGER,
+    "mewisDuct" TEXT,
     "serviceSpeedKn" DECIMAL(4,2),
+    "gasContainmentType" TEXT,
+    "minTemperatureC" DECIMAL(6,1),
+    "maxPressureBar" DECIMAL(6,2),
+    "carriesAmmonia" BOOLEAN NOT NULL DEFAULT false,
+    "carriesVcm" BOOLEAN NOT NULL DEFAULT false,
+    "carriesEthylene" BOOLEAN NOT NULL DEFAULT false,
+    "envScore" "EnvScore",
+    "ghgRating" "EnvScore",
+    "scrubbersInstalledDate" TIMESTAMP(3),
+    "ballastWaterTreatmentSystem" BOOLEAN NOT NULL DEFAULT false,
+    "neoPanamaLocks" BOOLEAN NOT NULL DEFAULT false,
+    "sternLine" BOOLEAN NOT NULL DEFAULT false,
+    "nextSpecialSurvey" TIMESTAMP(3),
+    "commercialOperator" TEXT,
+    "beneficialOwner" TEXT,
     "acquisitionCost" DECIMAL(14,2),
     "acquisitionDate" TIMESTAMP(3),
     "currentFmv" DECIMAL(14,2),
@@ -208,7 +294,6 @@ CREATE TABLE "vessels" (
     "currency" "Currency" NOT NULL DEFAULT 'USD',
     "lifecycleStatus" "VesselLifecycleStatus" NOT NULL DEFAULT 'ACTIVE',
     "employmentStatus" "EmploymentStatus" NOT NULL DEFAULT 'CURRENT_EARNINGS',
-    "envScore" "EnvScore",
     "isOnSale" BOOLEAN NOT NULL DEFAULT false,
     "onSaleAt" TIMESTAMP(3),
     "heroImageUrl" TEXT,
@@ -219,6 +304,37 @@ CREATE TABLE "vessels" (
     "createdBy" TEXT,
 
     CONSTRAINT "vessels_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vessel_order_book_entries" (
+    "id" TEXT NOT NULL,
+    "vesselId" TEXT NOT NULL,
+    "status" "VesselOrderBookStatus",
+    "orderDate" TIMESTAMP(3),
+    "constructionStartDate" TIMESTAMP(3),
+    "launchDate" TIMESTAMP(3),
+    "scheduledDeliveryDate" TIMESTAMP(3),
+    "cancelledDate" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "vessel_order_book_entries_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vessel_sanction_entries" (
+    "id" TEXT NOT NULL,
+    "vesselId" TEXT NOT NULL,
+    "authority" TEXT NOT NULL,
+    "program" TEXT,
+    "startDate" TIMESTAMP(3),
+    "endDate" TIMESTAMP(3),
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "vessel_sanction_entries_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -347,6 +463,12 @@ CREATE INDEX "vessels_orgId_deletedAt_idx" ON "vessels"("orgId", "deletedAt");
 CREATE UNIQUE INDEX "vessels_orgId_imo_name_key" ON "vessels"("orgId", "imo", "name");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "vessel_order_book_entries_vesselId_key" ON "vessel_order_book_entries"("vesselId");
+
+-- CreateIndex
+CREATE INDEX "vessel_sanction_entries_vesselId_startDate_idx" ON "vessel_sanction_entries"("vesselId", "startDate");
+
+-- CreateIndex
 CREATE INDEX "fleet_vessels_vesselId_idx" ON "fleet_vessels"("vesselId");
 
 -- CreateIndex
@@ -411,6 +533,12 @@ ALTER TABLE "vessels" ADD CONSTRAINT "vessels_classSocietyId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "vessels" ADD CONSTRAINT "vessels_engineModelId_fkey" FOREIGN KEY ("engineModelId") REFERENCES "engine_models"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vessel_order_book_entries" ADD CONSTRAINT "vessel_order_book_entries_vesselId_fkey" FOREIGN KEY ("vesselId") REFERENCES "vessels"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vessel_sanction_entries" ADD CONSTRAINT "vessel_sanction_entries_vesselId_fkey" FOREIGN KEY ("vesselId") REFERENCES "vessels"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "fleet_vessels" ADD CONSTRAINT "fleet_vessels_fleetId_fkey" FOREIGN KEY ("fleetId") REFERENCES "fleets"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -390,6 +390,7 @@ enum FleetVisibility {
 }
 
 enum VesselLifecycleStatus {
+  DRAFT     // Saved but not active — e.g. via "Save as Draft" on /vessels/new.
   ACTIVE
   LAID_UP
   DRYDOCK
@@ -454,58 +455,194 @@ model Vessel {
   id                String @id @default(cuid())
   orgId             String
 
-  // Identification
+  // ────────────────────────────────────────────────────────────────
+  // 1. Identification
+  // ────────────────────────────────────────────────────────────────
   imo               String
   name              String
   mmsi              String?
   callSign          String?
 
-  // References (FKs to reference tables)
   flagCountryId     String?
+  flagCode          String?  // ISO-3 like "LBR" — kept alongside FK
   portOfRegistryId  String?
-  vesselTypeId      String
-  shipyardId        String?
   classSocietyId    String?
-  engineModelId     String?
+  classRenewalDate  DateTime?
 
-  // "Other" free-text fallbacks (used when reference FK is null and user picked "Other")
+  // "Other" free-text fallbacks
   flagOther          String?
   portOfRegistryOther String?
-  shipyardOther     String?
-  classSocietyOther String?
-  engineModelOther  String?
+  classSocietyOther  String?
 
-  // Specifications
+  // ────────────────────────────────────────────────────────────────
+  // 2. Vessel Type & Classification
+  // ────────────────────────────────────────────────────────────────
+  vesselTypeId      String
+  builtForTrade     String?    // e.g. "Crude"
+  currentTrade      String?    // e.g. "Dirty"
+  designModel       String?    // e.g. "HHI Aframax"
+  iceClass          String?    // e.g. "1A"
+  propulsionType    String?    // e.g. "Diesel"
+  cleanDirtyWilling Boolean    @default(false)
+
+  // ────────────────────────────────────────────────────────────────
+  // 3. Build & Delivery
+  // ────────────────────────────────────────────────────────────────
   yearBuilt         Int
-  nextSpecialSurvey DateTime?
-  dwt               Int
-  grt               Int?
-  nrt               Int?
-  loaM              Decimal? @db.Decimal(6, 2)
-  beamM             Decimal? @db.Decimal(6, 2)
-  draftM            Decimal? @db.Decimal(6, 2)
-  serviceSpeedKn    Decimal? @db.Decimal(4, 2)
+  builtCountry      String?
+  shipyardId        String?
+  shipyardOther     String?
+  yardNumber        String?
+  deliveryDate      DateTime?
+  scrappedDate      DateTime?
 
-  // Commercial / financial snapshot
+  // ────────────────────────────────────────────────────────────────
+  // 4. Principal Dimensions
+  // ────────────────────────────────────────────────────────────────
+  dwt               Int
+  loaM              Decimal? @db.Decimal(6, 2)
+  beamM             Decimal? @db.Decimal(6, 2)     // breadth (decimal precision)
+  mouldedDepthM     Decimal? @db.Decimal(6, 2)
+  draftM            Decimal? @db.Decimal(6, 2)     // "Draught"
+  airDraughtM       Decimal? @db.Decimal(6, 2)
+  lightshipT        Int?
+  summerTpc         Decimal? @db.Decimal(8, 2)     // tonnes per centimetre immersion
+
+  // ────────────────────────────────────────────────────────────────
+  // 5. Tonnage
+  // ────────────────────────────────────────────────────────────────
+  grt               Int?
+  reducedGrt        Int?
+  nrt               Int?
+  panamaCanalNrt    Int?
+  suezCanalNrt      Int?
+
+  // ────────────────────────────────────────────────────────────────
+  // 6. Cargo Capacity
+  // ────────────────────────────────────────────────────────────────
+  cubicSizeM3       Int?
+  grainCapacityM3   Int?
+  baleCapacityM3    Int?
+  teu               Int?
+  teuAt14t          Int?
+  deckTeu           Int?
+  underDeckTeu      Int?
+  reefers           Int?
+
+  // ────────────────────────────────────────────────────────────────
+  // 7. Holds / Hatches / Cranes & Grabs
+  // ────────────────────────────────────────────────────────────────
+  numHolds          Int?
+  numHatches        Int?
+  numCranes         Int?
+  numGrabs          Int?
+  cranesMaxOutreachM Decimal? @db.Decimal(6, 2)
+  cranesMaxLiftingT  Int?
+  holdDetails        String? @db.Text
+  hatchDetails       String? @db.Text
+  craneDetails       String? @db.Text
+  grabDetails        String? @db.Text
+  isGeared             Boolean @default(false)
+  grabsFitted          Boolean @default(false)
+  boxShapedHolds       Boolean @default(false)
+  openHatch            Boolean @default(false)
+  australianHoldLadder Boolean @default(false)
+  logFitted            Boolean @default(false)
+  a60Bulkhead          Boolean @default(false)
+  co2Fitted            Boolean @default(false)
+
+  // ────────────────────────────────────────────────────────────────
+  // 8. Parallel Body Length
+  // ────────────────────────────────────────────────────────────────
+  parallelBodyLadenM   Decimal? @db.Decimal(6, 2)
+  parallelBodyBallastM Decimal? @db.Decimal(6, 2)
+  parallelBodyEmptyM   Decimal? @db.Decimal(6, 2)
+
+  // ────────────────────────────────────────────────────────────────
+  // 9. Manifold (tanker)
+  // ────────────────────────────────────────────────────────────────
+  bowToCentreManifoldM       Decimal? @db.Decimal(6, 2)
+  waterlineToManifoldM       Decimal? @db.Decimal(6, 2)
+  deckToCentreManifoldM      Decimal? @db.Decimal(6, 2)
+  railToCentreManifoldM      Decimal? @db.Decimal(6, 2)
+
+  // ────────────────────────────────────────────────────────────────
+  // 10. Tanker Equipment
+  // ────────────────────────────────────────────────────────────────
+  imoType            String?    // "1" | "2" | "3"
+  inertGasSystem     Boolean    @default(false)
+  crudeOilWashing    Boolean    @default(false)
+  heatingCoils       Boolean    @default(false)
+  ststCoating        Int?
+  epoxyCoating       Int?
+  zincCoating        Int?
+  marinelineCoating  Int?
+  interlineCoating   Int?
+
+  // ────────────────────────────────────────────────────────────────
+  // 11. Bow Equipment
+  // ────────────────────────────────────────────────────────────────
+  numBowChainStoppers     Int?
+  numBowThrusters         Int?
+  bowChainStopperDetails  String?
+  bowChainStoppersFitted  Boolean @default(false)
+
+  // ────────────────────────────────────────────────────────────────
+  // 12. Main Engine
+  // ────────────────────────────────────────────────────────────────
+  engineModelId      String?
+  engineModelOther   String?
+  engineManufacturer String?      // free-text fallback / display value
+  enginePowerKw      Int?
+  engineRpm          Int?
+  mewisDuct          String?      // "Fitted" / "Retrofit" / …
+  serviceSpeedKn     Decimal? @db.Decimal(4, 2)
+
+  // ────────────────────────────────────────────────────────────────
+  // 13. Gas Carrier (LPG / LNG)
+  // ────────────────────────────────────────────────────────────────
+  gasContainmentType String?
+  minTemperatureC    Decimal? @db.Decimal(6, 1)
+  maxPressureBar     Decimal? @db.Decimal(6, 2)
+  carriesAmmonia     Boolean  @default(false)
+  carriesVcm         Boolean  @default(false)
+  carriesEthylene    Boolean  @default(false)
+
+  // ────────────────────────────────────────────────────────────────
+  // 14. Environmental & Compliance
+  // ────────────────────────────────────────────────────────────────
+  envScore                    EnvScore?    // CII letter grade A-E
+  ghgRating                   EnvScore?    // separate GHG rating A-E
+  scrubbersInstalledDate      DateTime?
+  ballastWaterTreatmentSystem Boolean @default(false)
+  neoPanamaLocks              Boolean @default(false)
+  sternLine                   Boolean @default(false)
+  nextSpecialSurvey           DateTime?
+
+  // ────────────────────────────────────────────────────────────────
+  // 15. Operators & Owners
+  // ────────────────────────────────────────────────────────────────
+  commercialOperator String?
+  beneficialOwner    String?
+
+  // ────────────────────────────────────────────────────────────────
+  // 16. Commercial / financial snapshot
+  // ────────────────────────────────────────────────────────────────
   acquisitionCost  Decimal?  @db.Decimal(14, 2)
   acquisitionDate  DateTime?
   currentFmv       Decimal?  @db.Decimal(14, 2)
   outstandingLoan  Decimal?  @db.Decimal(14, 2)
   currency         Currency  @default(USD)
 
-  // Status & ESG snapshot
+  // ────────────────────────────────────────────────────────────────
+  // 17. Status / sale / misc
+  // ────────────────────────────────────────────────────────────────
   lifecycleStatus  VesselLifecycleStatus @default(ACTIVE)
   employmentStatus EmploymentStatus      @default(CURRENT_EARNINGS)
-  envScore         EnvScore?
 
-  // Sale indicator — cached flag for fast filtering in the Vessels-for-Sale
-  // module. Richer listing data (asking price, broker, listing date) will
-  // live in a separate VesselListing model when M08 ships; this flag stays
-  // on Vessel for performant table filters.
   isOnSale  Boolean   @default(false)
   onSaleAt  DateTime?
 
-  // Misc
   heroImageUrl String?
   notes        String? @db.Text
 
@@ -524,6 +661,8 @@ model Vessel {
   fleetVessels     FleetVessel[]
   ownershipHistory VesselOwnershipHistory[]
   certificates     VesselCertificate[]
+  orderBook        VesselOrderBookEntry?
+  sanctionEntries  VesselSanctionEntry[]
 
   // (orgId, imo, name) unique → same IMO with different names is allowed
   // per ADR-0002 (an org can track multiple records for one hull, e.g.
@@ -533,6 +672,54 @@ model Vessel {
   @@index([orgId, vesselTypeId])
   @@index([orgId, deletedAt])
   @@map("vessels")
+}
+
+/// Order-book lifecycle for newbuilds. One row per vessel; status reflects
+/// the latest milestone reached. Dates are nullable so partial data is OK.
+enum VesselOrderBookStatus {
+  ON_ORDER
+  UNDER_CONSTRUCTION
+  LAUNCHED
+  DELIVERED
+  CANCELLED
+}
+
+model VesselOrderBookEntry {
+  id                       String                 @id @default(cuid())
+  vesselId                 String                 @unique
+  status                   VesselOrderBookStatus?
+  orderDate                DateTime?
+  constructionStartDate    DateTime?
+  launchDate               DateTime?
+  scheduledDeliveryDate    DateTime?
+  cancelledDate            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vessel Vessel @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+
+  @@map("vessel_order_book_entries")
+}
+
+/// Sanctions imposed against a vessel by a sanctioning authority. A vessel
+/// can have multiple entries over time (different authorities / programs).
+model VesselSanctionEntry {
+  id          String   @id @default(cuid())
+  vesselId    String
+  authority   String              // "OFAC", "EU", "UK HMT", …
+  program     String?             // e.g. "Iran Sanctions Program"
+  startDate   DateTime?
+  endDate     DateTime?
+  description String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vessel Vessel @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+
+  @@index([vesselId, startDate])
+  @@map("vessel_sanction_entries")
 }
 
 model FleetVessel {

@@ -4,7 +4,6 @@
  * Loads everything the form needs in a single round trip:
  *   - reference data (vessel types, countries, ports, shipyards, etc.)
  *   - the org's active fleets (for the optional "Assign to Fleet" dropdown)
- *   - the current user's email (rendered read-only in the form header)
  *
  * The actual form is a client island bound to `createVesselAction` via
  * `useActionState`. On success the action redirects to
@@ -27,7 +26,6 @@ export default async function AddVesselPage() {
     <AddVesselForm
       referenceData={referenceData}
       fleets={fleets.map((f) => ({ id: f.id, name: f.name }))}
-      ownerLabel={session.email}
     />
   );
 }

@@ -18,7 +18,12 @@ Card.displayName = "Card";
 /**
  * CardHeader — tuned to the prototype's `.card-header` from
  * html/assets/css/signal-design-system.css:
- *   padding: var(--sp-md) var(--sp-lg)  →  py-4 (16px) / px-6 (24px)
+ *   padding: var(--sp-md) var(--sp-lg)       →  py-4 (16px) / px-6 (24px)
+ *   border-bottom: 1px solid var(--color-border)  →  border-b
+ *
+ * The border-bottom separates the header from the card body so the
+ * section title visually anchors above its form fields / content —
+ * matches every card in the HTML prototype.
  *
  * NOTE: For consistency across pages, prefer the higher-level
  * `<AppCardHeader>` component (components/app/card-header.tsx) which
@@ -28,7 +33,11 @@ const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("flex flex-col space-y-1 px-6 py-4", className)} {...props} />
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1 border-b px-6 py-4", className)}
+    {...props}
+  />
 ));
 CardHeader.displayName = "CardHeader";
 

@@ -87,7 +87,6 @@ function renderForm(state: VesselFormState = { ok: false, formError: null, field
     <AddVesselForm
       referenceData={refData}
       fleets={fleets}
-      ownerLabel="engineroom@oceanis.io"
     />,
   );
 }

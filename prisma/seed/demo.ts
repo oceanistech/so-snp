@@ -58,6 +58,29 @@ type VesselSeed = {
   onSaleAt?: Date;
   // Where the vessel lands — one fleet slug, or null for the unassigned pool.
   fleetSlug: string | null;
+
+  // ────────────────────────────────────────────────────────────────
+  // Optional per-vessel overrides for the expanded prototype fields.
+  // Anything left unset falls back to the `commonsForType()` defaults
+  // below, which give every vessel a plausible set of dimensions,
+  // engine specs, and compliance booleans without the table needing
+  // to enumerate them column-by-column.
+  // ────────────────────────────────────────────────────────────────
+  commercialOperator?: string;
+  beneficialOwner?: string;
+  iceClass?: string;
+  builtForTrade?: string;
+  currentTrade?: string;
+  // Order Book — set for newbuilds in the FUTURE_EARNINGS bucket.
+  orderBook?: {
+    status?: "ON_ORDER" | "UNDER_CONSTRUCTION" | "LAUNCHED" | "DELIVERED" | "CANCELLED";
+    orderDate?: Date;
+    constructionStartDate?: Date;
+    launchDate?: Date;
+    scheduledDeliveryDate?: Date;
+  };
+  // Sanction entries — typically empty; one legacy vessel carries one.
+  sanctions?: { authority: string; program?: string; startDate?: Date; endDate?: Date; description?: string }[];
 };
 
 const VESSELS: VesselSeed[] = [
@@ -113,13 +136,56 @@ const VESSELS: VesselSeed[] = [
   { name: "MV Med Pioneer",      imo: "9612003", typeCode: "BULK.HANDYSIZE",   yearBuilt: 2016, dwt: 36_000, flagIso2: "GR", shipyardName: "Yangzijiang Shipbuilding",       classSocietyCode: "BV",   envScore: EnvScore.B, fmvUsd: 13_500_000, employment: EmploymentStatus.CURRENT_EARNINGS,   fleetSlug: "mediterranean-coastal" },
 
   // Newbuilds 2024+ — 3 vessels (not yet delivered, FUTURE_EARNINGS)
-  { name: "MV Future I",         imo: "9924001", typeCode: "BULK.KAMSARMAX",   yearBuilt: 2024, dwt: 82_000, flagIso2: "SG", shipyardName: "Imabari Shipbuilding",          classSocietyCode: "NK",  envScore: EnvScore.A, fmvUsd: 36_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024" },
-  { name: "MT Future II",        imo: "9924002", typeCode: "TANKER.LR2",       yearBuilt: 2024, dwt: 115_000, flagIso2: "LR", shipyardName: "Hyundai Heavy Industries",     classSocietyCode: "DNV", envScore: EnvScore.A, fmvUsd: 70_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024" },
-  { name: "MV Future III",       imo: "9924003", typeCode: "CONTAINER.POSTPANAMAX", yearBuilt: 2025, dwt: 75_000, flagIso2: "MH", shipyardName: "Samsung Heavy Industries", classSocietyCode: "ABS", envScore: EnvScore.A, fmvUsd: 120_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024" },
+  {
+    name: "MV Future I", imo: "9924001", typeCode: "BULK.KAMSARMAX", yearBuilt: 2024, dwt: 82_000,
+    flagIso2: "SG", shipyardName: "Imabari Shipbuilding", classSocietyCode: "NK", envScore: EnvScore.A,
+    fmvUsd: 36_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024",
+    commercialOperator: "Star Bulk Carriers", beneficialOwner: "Cardiff Marine",
+    orderBook: {
+      status: "DELIVERED", orderDate: new Date("2021-08-15"),
+      constructionStartDate: new Date("2023-03-04"), launchDate: new Date("2024-01-22"),
+      scheduledDeliveryDate: new Date("2024-06-12"),
+    },
+  },
+  {
+    name: "MT Future II", imo: "9924002", typeCode: "TANKER.LR2", yearBuilt: 2024, dwt: 115_000,
+    flagIso2: "LR", shipyardName: "Hyundai Heavy Industries", classSocietyCode: "DNV", envScore: EnvScore.A,
+    fmvUsd: 70_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024",
+    commercialOperator: "Frontline", beneficialOwner: "John Fredriksen group",
+    orderBook: {
+      status: "LAUNCHED", orderDate: new Date("2022-05-20"),
+      constructionStartDate: new Date("2023-08-11"), launchDate: new Date("2024-09-30"),
+      scheduledDeliveryDate: new Date("2025-02-15"),
+    },
+  },
+  {
+    name: "MV Future III", imo: "9924003", typeCode: "CONTAINER.POSTPANAMAX", yearBuilt: 2025, dwt: 75_000,
+    flagIso2: "MH", shipyardName: "Samsung Heavy Industries", classSocietyCode: "ABS", envScore: EnvScore.A,
+    fmvUsd: 120_000_000, employment: EmploymentStatus.FUTURE_EARNINGS, fleetSlug: "newbuilds-2024",
+    commercialOperator: "Maersk", beneficialOwner: "A.P. Moller Holding",
+    orderBook: {
+      status: "UNDER_CONSTRUCTION", orderDate: new Date("2023-02-10"),
+      constructionStartDate: new Date("2024-11-05"),
+      scheduledDeliveryDate: new Date("2026-08-30"),
+    },
+  },
 
   // Legacy Holdings — 3 older vessels, laid up and marked for sale.
   { name: "MV Old Mariner",      imo: "9201001", typeCode: "BULK.SUPRAMAX",    yearBuilt: 2002, dwt: 53_000, flagIso2: "PA", shipyardName: "Mitsubishi Heavy Industries",   classSocietyCode: "NK",  envScore: EnvScore.D, fmvUsd:  7_500_000, lifecycle: VesselLifecycleStatus.LAID_UP,  employment: EmploymentStatus.HISTORIC_EARNINGS, isOnSale: true, onSaleAt: new Date("2026-02-12"), fleetSlug: "legacy-holdings" },
-  { name: "MT Old Trader",       imo: "9201002", typeCode: "TANKER.AFRAMAX",   yearBuilt: 2001, dwt: 110_000, flagIso2: "LR", shipyardName: "Hanjin Heavy Industries",      classSocietyCode: "KR",  envScore: EnvScore.E, fmvUsd:  6_500_000, lifecycle: VesselLifecycleStatus.LAID_UP,  employment: EmploymentStatus.HISTORIC_EARNINGS, isOnSale: true, onSaleAt: new Date("2026-01-08"), fleetSlug: "legacy-holdings" },
+  {
+    name: "MT Old Trader", imo: "9201002", typeCode: "TANKER.AFRAMAX", yearBuilt: 2001, dwt: 110_000,
+    flagIso2: "LR", shipyardName: "Hanjin Heavy Industries", classSocietyCode: "KR", envScore: EnvScore.E,
+    fmvUsd: 6_500_000, lifecycle: VesselLifecycleStatus.LAID_UP,
+    employment: EmploymentStatus.HISTORIC_EARNINGS, isOnSale: true,
+    onSaleAt: new Date("2026-01-08"), fleetSlug: "legacy-holdings",
+    sanctions: [
+      {
+        authority: "OFAC", program: "Iran Sanctions Program",
+        startDate: new Date("2019-09-25"), endDate: new Date("2022-03-14"),
+        description: "Vessel listed on the SDN list for Iranian crude transport.",
+      },
+    ],
+  },
   { name: "MV Old Voyager",      imo: "9301003", typeCode: "BULK.HANDYMAX",    yearBuilt: 2004, dwt: 47_000, flagIso2: "MH", shipyardName: "Daewoo Shipbuilding (DSME)",    classSocietyCode: "KR",  envScore: EnvScore.D, fmvUsd:  8_000_000, lifecycle: VesselLifecycleStatus.LAID_UP,  employment: EmploymentStatus.HISTORIC_EARNINGS, isOnSale: true, onSaleAt: new Date("2026-03-22"), fleetSlug: "legacy-holdings" },
 
   // Q1 Review — 1 vessel flagged for analyst review (and listed for sale).
@@ -135,6 +201,208 @@ const VESSELS: VesselSeed[] = [
   { name: "MV Unassigned Three", imo: "9520003", typeCode: "BULK.SUPRAMAX",    yearBuilt: 2011, dwt: 56_000, flagIso2: "LR", shipyardName: "Yangzijiang Shipbuilding",      classSocietyCode: "BV",  envScore: EnvScore.D, fmvUsd: 10_500_000, employment: EmploymentStatus.CURRENT_EARNINGS, fleetSlug: null },
   { name: "MV Unassigned Four",  imo: "9520004", typeCode: "BULK.HANDYSIZE",   yearBuilt: 2013, dwt: 34_500, flagIso2: "GR", shipyardName: "New Times Shipbuilding",        classSocietyCode: "CCS", envScore: EnvScore.C, fmvUsd:  9_200_000, employment: EmploymentStatus.CURRENT_EARNINGS, fleetSlug: null },
 ];
+
+/** Lookup ISO-3 flag code from ISO-2 — covers the ~15 demo flag states. */
+const ISO2_TO_ISO3: Record<string, string> = {
+  MH: "MHL", LR: "LBR", PA: "PAN", MT: "MLT", BS: "BHS", GR: "GRC",
+  SG: "SGP", HK: "HKG", NO: "NOR", VN: "VNM", PH: "PHL", DE: "DEU",
+  NL: "NLD", CY: "CYP", KR: "KOR",
+};
+
+/** Built-country guess from shipyard name (good enough for demo data). */
+function builtCountryFromYard(yard: string | undefined): string | undefined {
+  if (!yard) return undefined;
+  if (yard.includes("Hyundai") || yard.includes("HHI") || yard.includes("Daewoo") || yard.includes("Samsung") || yard.includes("Hanjin")) return "South Korea";
+  if (yard.includes("Imabari") || yard.includes("Tsuneishi") || yard.includes("Mitsui") || yard.includes("Mitsubishi") || yard.includes("Oshima") || yard.includes("Tsuji")) return "Japan";
+  if (yard.includes("Jiangsu") || yard.includes("COSCO") || yard.includes("Yangzijiang") || yard.includes("NACKS") || yard.includes("New Times") || yard.includes("Hudong")) return "China";
+  if (yard.includes("Fincantieri") || yard.includes("Damen") || yard.includes("Meyer")) return "Italy / Netherlands / Germany";
+  return undefined;
+}
+
+/**
+ * Plausible per-type defaults for the expanded fields. Demo-quality
+ * values — not real spec sheets — but enough that every prototype field
+ * has a value in the seeded DB so we can verify the form + detail page
+ * render every section end-to-end.
+ */
+function commonsForType(typeCode: string, dwt: number) {
+  const root = typeCode.split(".")[0]!;
+
+  // Base dimensions, type-appropriate.
+  const loaM =
+    dwt >= 250_000 ? 333 : dwt >= 150_000 ? 274 : dwt >= 80_000 ? 229
+    : dwt >= 50_000 ? 199 : dwt >= 30_000 ? 179 : 150;
+  const beamM =
+    dwt >= 250_000 ? 60 : dwt >= 150_000 ? 48 : dwt >= 80_000 ? 32.2
+    : dwt >= 50_000 ? 32.2 : 26;
+  const draftM =
+    dwt >= 250_000 ? 22 : dwt >= 150_000 ? 17 : dwt >= 80_000 ? 14.4
+    : dwt >= 50_000 ? 12.5 : 10;
+  const enginePowerKw =
+    dwt >= 150_000 ? 22_000 : dwt >= 80_000 ? 13_500
+    : dwt >= 50_000 ? 8_500 : 5_500;
+
+  const grt = Math.round(dwt * 0.55);
+  const nrt = Math.round(dwt * 0.34);
+
+  const common: Record<string, unknown> = {
+    // Principal Dimensions
+    loaM,
+    beamM,
+    mouldedDepthM: Math.round(draftM * 1.4 * 10) / 10,
+    draftM,
+    airDraughtM: dwt >= 80_000 ? 48 : 38,
+    lightshipT: Math.round(dwt * 0.18),
+    summerTpc: dwt >= 80_000 ? 89.3 : 47.8,
+
+    // Tonnage
+    grt,
+    reducedGrt: Math.round(grt * 0.9),
+    nrt,
+    panamaCanalNrt: Math.round(nrt * 1.05),
+    suezCanalNrt: Math.round(nrt * 1.18),
+
+    // Main Engine
+    engineManufacturer: dwt >= 80_000 ? "MAN B&W" : "Wärtsilä",
+    enginePowerKw,
+    engineRpm: dwt >= 80_000 ? 91 : 127,
+    mewisDuct: dwt >= 80_000 ? "Fitted" : "—",
+    serviceSpeedKn: dwt >= 80_000 ? 14.5 : 13.5,
+
+    // Parallel Body Length
+    parallelBodyLadenM: Math.round(loaM * 0.42 * 10) / 10,
+    parallelBodyBallastM: Math.round(loaM * 0.38 * 10) / 10,
+    parallelBodyEmptyM: Math.round(loaM * 0.33 * 10) / 10,
+
+    // Bow Equipment
+    numBowChainStoppers: dwt >= 80_000 ? 2 : 1,
+    numBowThrusters: dwt >= 50_000 ? 1 : 0,
+    bowChainStopperDetails: dwt >= 80_000 ? "2 × Smit brackets, 200t SWL" : "1 × bracket, 120t SWL",
+    bowChainStoppersFitted: dwt >= 50_000,
+
+    // Vessel Type & Classification
+    designModel: dwt >= 80_000 ? "HHI standard hull" : "Tsuneishi TESS series",
+    propulsionType: "Diesel",
+    cleanDirtyWilling: false,
+
+    // Environmental & Compliance
+    ballastWaterTreatmentSystem: true,
+    neoPanamaLocks: dwt >= 80_000 && dwt < 200_000,
+    sternLine: dwt >= 80_000,
+  };
+
+  if (root === "BULK") {
+    const holds = dwt >= 150_000 ? 9 : dwt >= 80_000 ? 7 : 5;
+    Object.assign(common, {
+      numHolds: holds,
+      numHatches: holds,
+      numCranes: dwt < 80_000 ? 4 : 0,
+      numGrabs: dwt < 80_000 ? 4 : 0,
+      cranesMaxOutreachM: dwt < 80_000 ? 22 : null,
+      cranesMaxLiftingT: dwt < 80_000 ? 35 : null,
+      holdDetails: `${holds} cargo holds, total cubic ${Math.round(dwt * 1.15)} m³`,
+      hatchDetails: `${holds} hatches, single pull MacGregor folding covers`,
+      craneDetails: dwt < 80_000 ? "4 × 35t deck cranes, hydraulic" : "Gearless",
+      grabDetails: dwt < 80_000 ? "4 × 12 m³ orange-peel grabs" : "n/a",
+      isGeared: dwt < 80_000,
+      grabsFitted: dwt < 80_000,
+      boxShapedHolds: true,
+      openHatch: dwt < 50_000,
+      australianHoldLadder: true,
+      logFitted: dwt < 80_000,
+      a60Bulkhead: dwt >= 50_000,
+      co2Fitted: true,
+      cubicSizeM3: Math.round(dwt * 1.15),
+      grainCapacityM3: Math.round(dwt * 1.13),
+      baleCapacityM3: Math.round(dwt * 1.09),
+      builtForTrade: dwt >= 150_000 ? "Iron Ore" : "Grain / Coal",
+      currentTrade: dwt >= 150_000 ? "Iron Ore" : "Grain",
+      iceClass: dwt >= 80_000 ? null : "1A",
+    });
+  } else if (root === "TANKER") {
+    const isClean = typeCode.includes("MR") || typeCode.includes("LR");
+    Object.assign(common, {
+      imoType: isClean ? "2" : "3",
+      inertGasSystem: true,
+      crudeOilWashing: dwt >= 80_000,
+      heatingCoils: !isClean,
+      ststCoating: isClean ? 0 : 0,
+      epoxyCoating: isClean ? 100 : 0,
+      zincCoating: isClean ? 0 : 0,
+      marinelineCoating: 0,
+      interlineCoating: 0,
+      bowToCentreManifoldM: Math.round(loaM * 0.55 * 10) / 10,
+      waterlineToManifoldM: dwt >= 150_000 ? 22 : 16,
+      deckToCentreManifoldM: 12,
+      railToCentreManifoldM: 2.5,
+      builtForTrade: isClean ? "Clean Products" : "Crude",
+      currentTrade: isClean ? "Clean" : "Dirty",
+      iceClass: dwt >= 80_000 ? null : "1A",
+    });
+  } else if (root === "GAS") {
+    const isLng = typeCode.includes("LNG");
+    Object.assign(common, {
+      gasContainmentType: isLng ? "Membrane (Mark III Flex)" : "Type C",
+      minTemperatureC: isLng ? -163 : -42,
+      maxPressureBar: isLng ? 0.7 : 18,
+      carriesAmmonia: !isLng,
+      carriesVcm: !isLng,
+      carriesEthylene: !isLng,
+      cubicSizeM3: isLng ? 174_000 : 84_000,
+      builtForTrade: isLng ? "LNG" : "LPG",
+      currentTrade: isLng ? "LNG" : "LPG",
+    });
+  } else if (root === "CONTAINER") {
+    const teu =
+      dwt >= 100_000 ? 9_000 : dwt >= 40_000 ? 3_500
+      : dwt >= 25_000 ? 2_200 : 1_000;
+    Object.assign(common, {
+      teu,
+      teuAt14t: Math.round(teu * 0.72),
+      deckTeu: Math.round(teu * 0.55),
+      underDeckTeu: Math.round(teu * 0.45),
+      reefers: Math.round(teu * 0.08),
+      builtForTrade: "Liner Container",
+      currentTrade: "Container",
+    });
+  }
+
+  return common;
+}
+
+/**
+ * Per-vessel fields derived deterministically from row inputs (imo + year
+ * + flag + shipyard). Keeps the seed compact while still populating most
+ * of the prototype's "header" fields like MMSI, port of registry, class
+ * renewal date, etc.
+ */
+function extrasForVessel(v: VesselSeed): Record<string, unknown> {
+  // Pseudo-MMSI: prefix "538" (Marshall Islands MID) for everyone — purely demo.
+  const mmsi = `538${v.imo.slice(0, 6)}`;
+  // Call sign: deterministic 5-char code from name.
+  const callSign = (v.name.replace(/[^A-Z]/g, "") + "AAAA").slice(0, 5);
+  return {
+    mmsi,
+    callSign,
+    flagCode: ISO2_TO_ISO3[v.flagIso2] ?? null,
+    builtCountry: builtCountryFromYard(v.shipyardName),
+    yardNumber: `S${v.imo.slice(-3)}`,
+    // Delivery typically mid-year of build.
+    deliveryDate: new Date(`${v.yearBuilt}-06-15`),
+    // Class certificate renewal: 5 years from build.
+    classRenewalDate: new Date(`${v.yearBuilt + 5}-09-30`),
+    // Scrubbers on newer vessels (built 2018+) with good env scores.
+    scrubbersInstalledDate:
+      v.yearBuilt >= 2018 && (v.envScore === "A" || v.envScore === "B")
+        ? new Date(`${v.yearBuilt + 2}-03-15`)
+        : null,
+    // Sane operator + owner defaults so the prototype's Operators & Owners
+    // section has something to render. Per-vessel overrides win.
+    commercialOperator: v.commercialOperator ?? "Demo Ship Management Ltd",
+    beneficialOwner: v.beneficialOwner ?? "Demo Portfolio Holdings",
+    nextSpecialSurvey: new Date(`${v.yearBuilt + 5}-09-30`),
+  };
+}
 
 export type SeedDemoResult = {
   fleets: number;
@@ -202,45 +470,66 @@ export async function seedDemoFleetsAndVessels(
     const shipyardId = v.shipyardName ? yardIdByName.get(v.shipyardName) ?? null : null;
     const classSocietyId = v.classSocietyCode ? classSocietyIdByCode.get(v.classSocietyCode) ?? null : null;
 
+    // Mix the original required fields with the type-derived defaults +
+    // per-vessel deterministic extras (mmsi, port, class renewal date,
+    // etc.) + any explicit per-vessel overrides from the seed row.
+    const commons = commonsForType(v.typeCode, v.dwt);
+    const extras = extrasForVessel(v);
+    const baseFields = {
+      vesselTypeId,
+      flagCountryId,
+      shipyardId,
+      classSocietyId,
+      yearBuilt: v.yearBuilt,
+      dwt: v.dwt,
+      envScore: v.envScore,
+      ghgRating: v.envScore, // mirror CII letter as GHG until they diverge
+      currentFmv: v.fmvUsd,
+      acquisitionCost: v.acquisitionCostUsd,
+      // Acquisition date: 6 months after build (delivery + half a year of broker work).
+      acquisitionDate: new Date(`${v.yearBuilt + 1}-01-15`),
+      outstandingLoan: v.outstandingLoanUsd,
+      lifecycleStatus: v.lifecycle ?? VesselLifecycleStatus.ACTIVE,
+      employmentStatus: v.employment ?? EmploymentStatus.CURRENT_EARNINGS,
+      isOnSale: v.isOnSale ?? false,
+      onSaleAt: v.onSaleAt ?? null,
+
+      // Type-driven defaults (LOA, beam, draft, engine, holds/teu/etc.)
+      ...commons,
+      // Deterministic per-vessel extras (mmsi, callsign, flagCode, …)
+      ...extras,
+      // Explicit per-vessel overrides win over everything else.
+      ...(v.iceClass ? { iceClass: v.iceClass } : {}),
+      ...(v.builtForTrade ? { builtForTrade: v.builtForTrade } : {}),
+      ...(v.currentTrade ? { currentTrade: v.currentTrade } : {}),
+      ...(v.commercialOperator ? { commercialOperator: v.commercialOperator } : {}),
+      ...(v.beneficialOwner ? { beneficialOwner: v.beneficialOwner } : {}),
+    };
+
     const vessel = await prisma.vessel.upsert({
       where: { orgId_imo_name: { orgId, imo: v.imo, name: v.name } },
-      update: {
-        vesselTypeId,
-        flagCountryId,
-        shipyardId,
-        classSocietyId,
-        yearBuilt: v.yearBuilt,
-        dwt: v.dwt,
-        envScore: v.envScore,
-        currentFmv: v.fmvUsd,
-        acquisitionCost: v.acquisitionCostUsd,
-        outstandingLoan: v.outstandingLoanUsd,
-        lifecycleStatus: v.lifecycle ?? VesselLifecycleStatus.ACTIVE,
-        employmentStatus: v.employment ?? EmploymentStatus.CURRENT_EARNINGS,
-        isOnSale: v.isOnSale ?? false,
-        onSaleAt: v.onSaleAt ?? null,
-        deletedAt: null,
-      },
-      create: {
-        orgId,
-        imo: v.imo,
-        name: v.name,
-        vesselTypeId,
-        flagCountryId,
-        shipyardId,
-        classSocietyId,
-        yearBuilt: v.yearBuilt,
-        dwt: v.dwt,
-        envScore: v.envScore,
-        currentFmv: v.fmvUsd,
-        acquisitionCost: v.acquisitionCostUsd,
-        outstandingLoan: v.outstandingLoanUsd,
-        lifecycleStatus: v.lifecycle ?? VesselLifecycleStatus.ACTIVE,
-        employmentStatus: v.employment ?? EmploymentStatus.CURRENT_EARNINGS,
-        isOnSale: v.isOnSale ?? false,
-        onSaleAt: v.onSaleAt,
-      },
+      update: { ...baseFields, deletedAt: null },
+      create: { orgId, imo: v.imo, name: v.name, ...baseFields },
     });
+
+    // Optional newbuild order-book journey (one row per vessel).
+    if (v.orderBook) {
+      await prisma.vesselOrderBookEntry.upsert({
+        where: { vesselId: vessel.id },
+        update: v.orderBook,
+        create: { vesselId: vessel.id, ...v.orderBook },
+      });
+    }
+
+    // Optional sanctions entries (zero or more per vessel).
+    if (v.sanctions && v.sanctions.length > 0) {
+      // The seed is idempotent on (vesselId, authority + program); easiest
+      // pattern is delete + recreate the small set on each run.
+      await prisma.vesselSanctionEntry.deleteMany({ where: { vesselId: vessel.id } });
+      await prisma.vesselSanctionEntry.createMany({
+        data: v.sanctions.map((s) => ({ vesselId: vessel.id, ...s })),
+      });
+    }
 
     // FleetVessel membership — keyed on (fleetId, vesselId)
     if (v.fleetSlug) {
