@@ -20,6 +20,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { AppPageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
+import { FleetService } from "@/lib/services/fleet.service";
 import { VesselService } from "@/lib/services/vessel.service";
 import { requireSession } from "@/lib/auth/session";
 import { VesselDetailTabs } from "./vessel-detail-tabs";
@@ -38,7 +39,12 @@ export default async function VesselDetailPage({
   const { imo: vesselId } = await params;
   const { created } = await searchParams;
 
-  const vessel = await new VesselService().getDetailById(vesselId, session.orgId);
+  // Fetch the vessel + the org's fleets in parallel — the fleets list
+  // feeds the Actions menu's "Move to Fleet" picker.
+  const [vessel, fleets] = await Promise.all([
+    new VesselService().getDetailById(vesselId, session.orgId),
+    new FleetService().listForOrg(session.orgId),
+  ]);
   if (!vessel) notFound();
 
   return (
@@ -64,13 +70,18 @@ export default async function VesselDetailPage({
                 Back to Fleets
               </Link>
             </Button>
-            <VesselActionsMenu vesselId={vessel.id} vesselName={vessel.name} />
+            <VesselActionsMenu
+              vesselId={vessel.id}
+              vesselName={vessel.name}
+              vesselImo={vessel.imo}
+              fleets={fleets.map((f) => ({ id: f.id, name: f.name }))}
+            />
           </>
         }
       />
 
       {created ? (
-        <div className="mx-8 mt-4 flex items-center gap-3 rounded-md border border-signal-green/40 bg-signal-green/8 px-4 py-2.5 text-[12px]">
+        <div className="mx-8 my-4 flex items-center gap-3 rounded-md border border-signal-green/40 bg-signal-green/8 px-4 py-2.5 text-[12px]">
           <span aria-hidden className="inline-block size-2 rounded-full bg-signal-green" />
           <span>
             <strong className="font-bold">{vessel.name}</strong> was saved.{" "}

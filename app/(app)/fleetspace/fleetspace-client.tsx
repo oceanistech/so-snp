@@ -41,6 +41,7 @@ import { VesselDetailTabs } from "@/app/(app)/vessels/[imo]/vessel-detail-tabs";
 import { VesselActionsMenu } from "@/app/(app)/vessels/[imo]/vessel-actions-menu";
 import { FleetActionsMenu } from "./fleet-actions-menu";
 import { FleetDetailActionsMenu } from "./fleet-detail-actions-menu";
+import { VesselRowActionsMenu } from "./vessel-row-actions-menu";
 
 /* --------------------------------------------------------------------------
  * Visual helpers — match the prototype's type tag and dot colour palette.
@@ -87,6 +88,26 @@ function fmtFmvUsd(usd: number) {
   if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(0)}M`;
   if (usd >= 1000) return `$${(usd / 1000).toFixed(0)}K`;
   return `$${usd}`;
+}
+
+/**
+ * Short form of a raw-USD FMV value used inside a vessel-table cell —
+ * one-decimal millions ($24.5M / $24.5K). Companion to `fmtFmvFullUsd`
+ * which is rendered as a hover tooltip with the full amount.
+ */
+function fmtFmvShortUsd(usd: number) {
+  if (Math.abs(usd) >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(usd) >= 1_000) return `$${(usd / 1_000).toFixed(1)}K`;
+  return `$${usd}`;
+}
+
+/**
+ * Full-precision USD string (comma-separated, no "M"/"K" suffix). Shown
+ * as the `title` tooltip on FMV cells so power users can read the exact
+ * value without losing the compact short form in the table.
+ */
+function fmtFmvFullUsd(usd: number) {
+  return `$${Math.round(usd).toLocaleString("en-US")}`;
 }
 
 function fmtCreated(d: Date) {
@@ -518,6 +539,7 @@ export function FleetspaceClient({
                 vessels={initialVessels.filter((v) =>
                   v.fleets.some((fl) => fl.id === activeFleet.id),
                 )}
+                allFleets={initialFleets}
                 onOpenVessel={(vesselId) =>
                   openVesselTab(activeFleet.id, vesselId)
                 }
@@ -534,6 +556,7 @@ export function FleetspaceClient({
                 )?.name ?? "Vessel"
               }
               cached={vesselDetailCache[activeVesselByFleet[activeFleet.id]!]}
+              fleets={initialFleets.map((f) => ({ id: f.id, name: f.name }))}
             />
           )
         ) : null}
@@ -910,11 +933,16 @@ const YEAR_TEST: Record<string, (y: number) => boolean> = {
 function FleetDetailView({
   fleet,
   vessels,
+  allFleets,
   onOpenVessel,
   onRemoved,
 }: {
   fleet: FleetSummary;
   vessels: VesselListItem[];
+  /** All fleets in the org — forwarded to each vessel row's
+   *  `VesselRowActionsMenu` so the "Move to Fleet" picker has every
+   *  destination to choose from. */
+  allFleets: FleetSummary[];
   onOpenVessel: (vesselId: string) => void;
   /** Invoked after the fleet is successfully soft-deleted from this
    *  tab's "Remove Fleet" action — the parent uses this to drop the
@@ -924,6 +952,11 @@ function FleetDetailView({
   const [filterType, setFilterType] = React.useState<string>("");
   const [filterYear, setFilterYear] = React.useState<string>("");
   const [filterSearch, setFilterSearch] = React.useState("");
+
+  // Pagination — defaults to 5 vessels per page (matches the All Fleets
+  // table). The per-page select offers 5/10/25.
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(5);
 
   const filtered = React.useMemo(() => {
     return vessels.filter((v) => {
@@ -938,6 +971,31 @@ function FleetDetailView({
       return true;
     });
   }, [vessels, filterType, filterYear, filterSearch]);
+
+  // Clamp `page` back into range when the dataset shrinks (filters
+  // narrow rows, a vessel is removed/moved, per-page goes up, …).
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  React.useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginated = React.useMemo(
+    () => filtered.slice((page - 1) * perPage, page * perPage),
+    [filtered, page, perPage],
+  );
+
+  // Reset to page 1 whenever any filter input changes so the user
+  // always lands on the first page of the new result set.
+  React.useEffect(() => {
+    setPage(1);
+  }, [filterType, filterYear, filterSearch, perPage]);
+
+  // Flatten allFleets into the simple {id,name} shape the move dialog
+  // expects. Computed once per render — list is short.
+  const fleetOptions = React.useMemo(
+    () => allFleets.map((f) => ({ id: f.id, name: f.name })),
+    [allFleets],
+  );
 
   return (
     <>
@@ -1019,10 +1077,21 @@ function FleetDetailView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v) => {
+              {paginated.map((v) => {
                 const tag = TYPE_TAG[v.typeRoot] ?? TYPE_TAG.OTHER;
                 return (
-                  <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={v.id}
+                    className={cn(
+                      "border-b last:border-0 hover:bg-muted/30",
+                      // On-sale vessels get a magenta left-accent stripe
+                      // + a subtle row-level tint so the row reads as
+                      // "actively for sale" before the user even
+                      // reaches the On Sale column.
+                      v.isOnSale &&
+                        "border-l-2 border-l-signal-magenta bg-signal-magenta/[0.03]",
+                    )}
+                  >
                     <td className="px-3 py-2.5">
                       <button
                         type="button"
@@ -1054,21 +1123,48 @@ function FleetDetailView({
                       {v.envScore ? <EnvScoreBadge value={v.envScore} /> : "—"}
                     </td>
                     <td className="px-3 py-2.5 font-semibold tabular-nums">
-                      {v.currentFmvUsd == null ? "—" : `$${v.currentFmvUsd.toFixed(1)}M`}
+                      {v.currentFmvUsd == null ? (
+                        "—"
+                      ) : (
+                        /* `currentFmvUsd` is raw USD (e.g. 24_500_000).
+                           Show the short "$24.5M" form in the cell and
+                           the full comma-separated USD amount via the
+                           native title-attribute tooltip on hover. */
+                        <span
+                          title={fmtFmvFullUsd(v.currentFmvUsd)}
+                          className="cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+                        >
+                          {fmtFmvShortUsd(v.currentFmvUsd)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       {v.isOnSale ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-signal-magenta/10 px-2 py-0.5 text-[10px] font-bold text-signal-magenta">
-                          ON SALE
+                        /* Highlighted ON-SALE pill — solid magenta fill +
+                           white text + soft outer ring + an animated
+                           white dot so the row stands out at a glance
+                           when scanning a fleet's vessel table. */
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-signal-magenta px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-primary-foreground shadow-sm ring-2 ring-signal-magenta/20">
+                          <span
+                            aria-hidden
+                            className="inline-block size-1.5 animate-pulse rounded-full bg-primary-foreground"
+                          />
+                          On Sale
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <Button size="sm" variant="ghost" className="gap-1">
-                        More
-                      </Button>
+                    <td
+                      className="px-3 py-2.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <VesselRowActionsMenu
+                        vessel={v}
+                        fleets={fleetOptions}
+                        currentFleetId={fleet.id}
+                        onView={onOpenVessel}
+                      />
                     </td>
                   </tr>
                 );
@@ -1093,12 +1189,17 @@ function FleetDetailView({
           </table>
         </div>
         <TablePagination
-          page={1}
-          totalPages={1}
+          page={page}
+          totalPages={totalPages}
           totalRows={filtered.length}
-          perPage={10}
-          perPageOptions={[10, 25, 50]}
+          perPage={perPage}
+          perPageOptions={[5, 10, 25]}
           rowLabel="vessel"
+          onPageChange={(next) => setPage(next)}
+          onPerPageChange={(next) => {
+            setPerPage(next);
+            setPage(1);
+          }}
         />
       </Card>
 
@@ -1205,11 +1306,15 @@ function VesselSubTabContent({
   fleetName,
   fallbackName,
   cached,
+  fleets,
 }: {
   vesselId: string;
   fleetName: string;
   fallbackName: string;
   cached: VesselDetail | "loading" | "error" | undefined;
+  /** Every fleet in the org — forwarded to the vessel's Actions menu so
+   *  the "Move to Fleet" picker has every destination available. */
+  fleets: { id: string; name: string }[];
 }) {
   if (cached === "loading" || cached === undefined) {
     return (
@@ -1269,7 +1374,12 @@ function VesselSubTabContent({
             <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <VesselActionsMenu vesselId={vessel.id} vesselName={vessel.name} />
+            <VesselActionsMenu
+              vesselId={vessel.id}
+              vesselName={vessel.name}
+              vesselImo={vessel.imo}
+              fleets={fleets}
+            />
           </div>
         </div>
       }

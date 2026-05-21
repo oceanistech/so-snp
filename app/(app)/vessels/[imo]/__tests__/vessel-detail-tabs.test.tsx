@@ -67,6 +67,125 @@ function vessel(overrides: Partial<VesselDetail> = {}): VesselDetail {
     fleets: overrides.fleets ?? [],
     certificates: overrides.certificates ?? [],
     ownershipHistory: overrides.ownershipHistory ?? [],
+
+    // ── Extended scalar/boolean fields surfaced on the detail page.
+    //    Defaults are intentionally null/false so the corresponding
+    //    SpecCard tiles self-hide via the `has(...)` guards and don't
+    //    introduce extra DOM that breaks the existing assertions. Any
+    //    test that needs to exercise these tiles can pass them via
+    //    `overrides`. Grouped to mirror the order in `VesselDetail`. ──
+
+    // Type & Classification
+    builtForTrade: overrides.builtForTrade ?? null,
+    currentTrade: overrides.currentTrade ?? null,
+    designModel: overrides.designModel ?? null,
+    iceClass: overrides.iceClass ?? null,
+    propulsionType: overrides.propulsionType ?? null,
+    cleanDirtyWilling: overrides.cleanDirtyWilling ?? false,
+
+    // Build & Delivery
+    builtCountry: overrides.builtCountry ?? null,
+    yardNumber: overrides.yardNumber ?? null,
+    deliveryDate: overrides.deliveryDate ?? null,
+    scrappedDate: overrides.scrappedDate ?? null,
+
+    // Dimensions (extended)
+    mouldedDepthM: overrides.mouldedDepthM ?? null,
+    airDraughtM: overrides.airDraughtM ?? null,
+    lightshipT: overrides.lightshipT ?? null,
+    summerTpc: overrides.summerTpc ?? null,
+
+    // Tonnage (extended)
+    reducedGrt: overrides.reducedGrt ?? null,
+    panamaCanalNrt: overrides.panamaCanalNrt ?? null,
+    suezCanalNrt: overrides.suezCanalNrt ?? null,
+
+    // Cargo Capacity
+    cubicSizeM3: overrides.cubicSizeM3 ?? null,
+    grainCapacityM3: overrides.grainCapacityM3 ?? null,
+    baleCapacityM3: overrides.baleCapacityM3 ?? null,
+    teu: overrides.teu ?? null,
+    teuAt14t: overrides.teuAt14t ?? null,
+    deckTeu: overrides.deckTeu ?? null,
+    underDeckTeu: overrides.underDeckTeu ?? null,
+    reefers: overrides.reefers ?? null,
+
+    // Holds, Hatches, Cranes & Grabs
+    numHolds: overrides.numHolds ?? null,
+    numHatches: overrides.numHatches ?? null,
+    numCranes: overrides.numCranes ?? null,
+    numGrabs: overrides.numGrabs ?? null,
+    cranesMaxOutreachM: overrides.cranesMaxOutreachM ?? null,
+    cranesMaxLiftingT: overrides.cranesMaxLiftingT ?? null,
+    holdDetails: overrides.holdDetails ?? null,
+    hatchDetails: overrides.hatchDetails ?? null,
+    craneDetails: overrides.craneDetails ?? null,
+    grabDetails: overrides.grabDetails ?? null,
+    isGeared: overrides.isGeared ?? false,
+    grabsFitted: overrides.grabsFitted ?? false,
+    boxShapedHolds: overrides.boxShapedHolds ?? false,
+    openHatch: overrides.openHatch ?? false,
+    australianHoldLadder: overrides.australianHoldLadder ?? false,
+    logFitted: overrides.logFitted ?? false,
+    a60Bulkhead: overrides.a60Bulkhead ?? false,
+    co2Fitted: overrides.co2Fitted ?? false,
+
+    // Parallel Body Length
+    parallelBodyLadenM: overrides.parallelBodyLadenM ?? null,
+    parallelBodyBallastM: overrides.parallelBodyBallastM ?? null,
+    parallelBodyEmptyM: overrides.parallelBodyEmptyM ?? null,
+
+    // Manifold (tankers)
+    bowToCentreManifoldM: overrides.bowToCentreManifoldM ?? null,
+    waterlineToManifoldM: overrides.waterlineToManifoldM ?? null,
+    deckToCentreManifoldM: overrides.deckToCentreManifoldM ?? null,
+    railToCentreManifoldM: overrides.railToCentreManifoldM ?? null,
+
+    // Tanker Equipment
+    imoType: overrides.imoType ?? null,
+    inertGasSystem: overrides.inertGasSystem ?? false,
+    crudeOilWashing: overrides.crudeOilWashing ?? false,
+    heatingCoils: overrides.heatingCoils ?? false,
+    ststCoating: overrides.ststCoating ?? null,
+    epoxyCoating: overrides.epoxyCoating ?? null,
+    zincCoating: overrides.zincCoating ?? null,
+    marinelineCoating: overrides.marinelineCoating ?? null,
+    interlineCoating: overrides.interlineCoating ?? null,
+
+    // Bow Equipment
+    numBowChainStoppers: overrides.numBowChainStoppers ?? null,
+    numBowThrusters: overrides.numBowThrusters ?? null,
+    bowChainStopperDetails: overrides.bowChainStopperDetails ?? null,
+    bowChainStoppersFitted: overrides.bowChainStoppersFitted ?? false,
+
+    // Main Engine (extended beyond engineModel relation)
+    engineManufacturer: overrides.engineManufacturer ?? null,
+    enginePowerKw: overrides.enginePowerKw ?? null,
+    engineRpm: overrides.engineRpm ?? null,
+    mewisDuct: overrides.mewisDuct ?? null,
+
+    // Gas Carrier
+    gasContainmentType: overrides.gasContainmentType ?? null,
+    minTemperatureC: overrides.minTemperatureC ?? null,
+    maxPressureBar: overrides.maxPressureBar ?? null,
+    carriesAmmonia: overrides.carriesAmmonia ?? false,
+    carriesVcm: overrides.carriesVcm ?? false,
+    carriesEthylene: overrides.carriesEthylene ?? false,
+
+    // Environmental & Compliance
+    ghgRating: overrides.ghgRating ?? null,
+    scrubbersInstalledDate: overrides.scrubbersInstalledDate ?? null,
+    ballastWaterTreatmentSystem: overrides.ballastWaterTreatmentSystem ?? false,
+    neoPanamaLocks: overrides.neoPanamaLocks ?? false,
+    sternLine: overrides.sternLine ?? false,
+
+    // Operators & Owners
+    commercialOperator: overrides.commercialOperator ?? null,
+    beneficialOwner: overrides.beneficialOwner ?? null,
+
+    // Order Book — null when the vessel was already delivered.
+    orderBook: overrides.orderBook ?? null,
+
     createdAt: overrides.createdAt ?? new Date("2026-01-01"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01"),
   };

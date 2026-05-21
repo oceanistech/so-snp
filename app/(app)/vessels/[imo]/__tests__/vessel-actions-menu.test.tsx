@@ -17,7 +17,14 @@ import { VesselActionsMenu } from "../vessel-actions-menu";
 
 describe("VesselActionsMenu", () => {
   it("renders the Actions trigger button", () => {
-    render(<VesselActionsMenu vesselId="v-1" vesselName="MV Pacific Star" />);
+    render(
+      <VesselActionsMenu
+        vesselId="v-1"
+        vesselName="MV Pacific Star"
+        vesselImo="9623148"
+        fleets={[{ id: "f-1", name: "Fleet Alpha" }]}
+      />,
+    );
     const trigger = screen.getByRole("button", { name: /actions/i });
     expect(trigger).toBeInTheDocument();
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");

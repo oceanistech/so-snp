@@ -56,7 +56,10 @@ function vessel(overrides: Partial<VesselListItem> = {}): VesselListItem {
     typeRoot: overrides.typeRoot ?? "BULK",
     yearBuilt: overrides.yearBuilt ?? 2016,
     dwt: overrides.dwt ?? 82_000,
-    currentFmvUsd: overrides.currentFmvUsd ?? 28.5,
+    // `currentFmvUsd` is raw USD (matches the real Prisma projection
+    // — `Decimal(14, 2)` columns are stored as full dollar amounts).
+    // 28_500_000 renders as "$28.5M" in the table.
+    currentFmvUsd: overrides.currentFmvUsd ?? 28_500_000,
     envScore: overrides.envScore ?? "A",
     lifecycleStatus: overrides.lifecycleStatus ?? "ACTIVE",
     employmentStatus: overrides.employmentStatus ?? "CURRENT_EARNINGS",

@@ -1,22 +1,22 @@
 "use client";
 /**
- * VesselActionsMenu — page-header Actions dropdown for /vessels/[id].
+ * VesselRowActionsMenu — the per-row "More" dropdown on the vessel
+ * table inside an opened fleet on /fleetspace. Mirrors the row-level
+ * `FleetActionsMenu` styling and divider conventions.
  *
- * Structure (matches the row-level menu on /fleetspace's vessel table,
- * grouped into General → Analytics → Documents → Danger):
- *
+ * Menu items, grouped:
  *   General
+ *     - View Vessel       → `onView(vesselId)` (open as sub-tab)
  *     - Edit Vessel       → `/vessels/[id]/edit`
- *     - Duplicate Vessel  → DuplicateVesselDialog (free-floating copy)
+ *     - Duplicate Vessel  → DuplicateVesselDialog
  *     - Move to Fleet     → MoveVesselToFleetDialog
- *     - Add to Project    → toast placeholder (M16)
- *   Analytics
- *     - Run Loan Oracle           (M14, placeholder toast)
- *     - Run Cashflow              (M15, placeholder toast)
- *   Documents
- *     - Request Valuation Certificate (M13, placeholder toast)
+ *   Analytics (placeholder toasts — features ship in later modules)
+ *     - Add to Project              (M16)
+ *     - Run Loan Oracle             (M14)
+ *     - Run Cashflow                (M15)
+ *     - Request Valuation Certificate (M13)
  *   Danger
- *     - Remove Vessel     → ConfirmDialog → soft-delete → /fleetspace
+ *     - Remove Vessel     → ConfirmDialog → deleteVesselAction
  */
 import * as React from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -26,6 +26,7 @@ import {
   BarChart3,
   ChevronDown,
   Copy,
+  Eye,
   FolderOpen,
   Layers,
   LineChart,
@@ -35,68 +36,51 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deleteVesselAction } from "@/lib/actions/vessel.actions";
+import type { VesselListItem } from "@/lib/services/vessel.service";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import {
-  DuplicateVesselDialog,
-  type DuplicateVesselTarget,
-} from "@/app/(app)/fleetspace/duplicate-vessel-dialog";
-import {
-  MoveVesselToFleetDialog,
-  type MoveVesselTarget,
-} from "@/app/(app)/fleetspace/move-vessel-to-fleet-dialog";
+import { DuplicateVesselDialog } from "./duplicate-vessel-dialog";
+import { MoveVesselToFleetDialog } from "./move-vessel-to-fleet-dialog";
 
-export type VesselActionsFleet = { id: string; name: string };
+export type FleetOption = { id: string; name: string };
 
-type VesselActionsMenuProps = {
-  vesselId: string;
-  vesselName: string;
-  vesselImo: string;
-  /** Every fleet in the org — passed to the Move to Fleet dialog so it
-   *  has every destination to choose from. */
-  fleets: VesselActionsFleet[];
-};
-
-export function VesselActionsMenu({
-  vesselId,
-  vesselName,
-  vesselImo,
+export function VesselRowActionsMenu({
+  vessel,
   fleets,
-}: VesselActionsMenuProps) {
+  currentFleetId,
+  onView,
+}: {
+  vessel: VesselListItem;
+  /** All fleets in the org — passed to the move dialog so the user can
+   *  pick a destination. The dialog excludes the vessel's current fleet. */
+  fleets: FleetOption[];
+  /** The fleet whose tab we're currently viewing inside (so we can
+   *  exclude it from the "Move to Fleet" picker). */
+  currentFleetId: string;
+  /** Open the vessel as a sub-tab inside the current fleet view. */
+  onView: (vesselId: string) => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [duplicateOpen, setDuplicateOpen] = React.useState(false);
   const [moveOpen, setMoveOpen] = React.useState(false);
   const [removeOpen, setRemoveOpen] = React.useState(false);
 
-  const duplicateTarget: DuplicateVesselTarget = {
-    id: vesselId,
-    name: vesselName,
-    imo: vesselImo,
-  };
-  const moveTarget: MoveVesselTarget = {
-    id: vesselId,
-    name: vesselName,
-  };
-
-  function placeholder(action: string, target: string) {
-    toast.info(`${action} — coming in a future release`, {
-      description: `${vesselName} will be the subject when ${target} ships.`,
+  function placeholder(label: string, module: string) {
+    toast.info(`${label} — coming in a future release`, {
+      description: `${vessel.name} will be the subject when ${module} ships.`,
     });
   }
 
   function handleEdit() {
-    router.push(`/vessels/${encodeURIComponent(vesselId)}/edit`);
+    router.push(`/vessels/${encodeURIComponent(vessel.id)}/edit`);
   }
 
   function confirmRemove() {
     startTransition(async () => {
-      const res = await deleteVesselAction(vesselId);
+      const res = await deleteVesselAction(vessel.id);
       if (res.ok) {
-        toast.success(res.message ?? `"${vesselName}" removed.`);
+        toast.success(res.message ?? `"${vessel.name}" removed.`);
         setRemoveOpen(false);
-        // No row to refresh — bounce back to the fleets listing where
-        // the user can see the deletion took effect.
-        router.push("/fleetspace");
         router.refresh();
       } else {
         toast.error(res.error);
@@ -112,9 +96,10 @@ export function VesselActionsMenu({
             type="button"
             disabled={pending}
             aria-haspopup="menu"
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-primary bg-primary px-3.5 text-[12px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-[#1278e0] hover:border-[#1278e0] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label={`Actions for vessel ${vessel.name}`}
+            className="inline-flex h-[26px] items-center gap-1 rounded border border-input bg-card px-2.5 text-[11px] font-semibold text-foreground shadow-sm transition-colors hover:bg-background hover:border-foreground/25 hover:shadow active:bg-muted active:shadow-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Actions
+            <span>More</span>
             <ChevronDown className="size-3 transition-transform data-[state=open]:rotate-180" />
           </button>
         </DropdownMenu.Trigger>
@@ -122,12 +107,11 @@ export function VesselActionsMenu({
           <DropdownMenu.Content
             align="end"
             sideOffset={6}
-            /* py-1 keeps vertical breathing room; px-0 lets each item's
-               highlight band run edge-to-edge — same pattern as the
-               row-level menu. */
-            className="z-50 min-w-[230px] overflow-hidden rounded-md border bg-card py-1 shadow-lg ring-1 ring-black/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            className="z-50 min-w-[220px] overflow-hidden rounded-md border bg-card py-1 shadow-lg ring-1 ring-black/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           >
-            <GroupLabel>General</GroupLabel>
+            <Item icon={<Eye className="size-3.5" />} onSelect={() => onView(vessel.id)}>
+              View Vessel
+            </Item>
             <Item icon={<Pencil className="size-3.5" />} onSelect={handleEdit}>
               Edit Vessel
             </Item>
@@ -137,15 +121,15 @@ export function VesselActionsMenu({
             <Item icon={<Layers className="size-3.5" />} onSelect={() => setMoveOpen(true)}>
               Move to Fleet
             </Item>
+
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
             <Item
               icon={<FolderOpen className="size-3.5" />}
-              onSelect={() => placeholder("Add to Project", "the Projects module (M16)")}
+              onSelect={() => placeholder("Add to Project", "Projects (M16)")}
             >
               Add to Project
             </Item>
-
-            <Divider />
-            <GroupLabel>Analytics</GroupLabel>
             <Item
               icon={<BarChart3 className="size-3.5" />}
               onSelect={() => placeholder("Run Loan Oracle", "Loan Oracle (M14)")}
@@ -158,9 +142,6 @@ export function VesselActionsMenu({
             >
               Run Cashflow
             </Item>
-
-            <Divider />
-            <GroupLabel>Documents</GroupLabel>
             <Item
               icon={<ScrollText className="size-3.5" />}
               onSelect={() =>
@@ -170,7 +151,8 @@ export function VesselActionsMenu({
               Request Valuation Certificate
             </Item>
 
-            <Divider />
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
             <Item
               icon={<Trash2 className="size-3.5" />}
               onSelect={() => setRemoveOpen(true)}
@@ -183,14 +165,16 @@ export function VesselActionsMenu({
       </DropdownMenu.Root>
 
       <DuplicateVesselDialog
-        vessel={duplicateTarget}
+        vessel={vessel}
+        attachToFleetId={currentFleetId}
         open={duplicateOpen}
         onOpenChange={setDuplicateOpen}
       />
 
       <MoveVesselToFleetDialog
-        vessel={moveTarget}
+        vessel={vessel}
         fleets={fleets}
+        currentFleetId={currentFleetId}
         open={moveOpen}
         onOpenChange={setMoveOpen}
       />
@@ -202,7 +186,7 @@ export function VesselActionsMenu({
         description={
           <>
             Remove vessel{" "}
-            <strong className="font-semibold text-foreground">{vesselName}</strong>?
+            <strong className="font-semibold text-foreground">{vessel.name}</strong>?
             The vessel will be soft-deleted and disappear from the listing.
             This action cannot be undone from the UI.
           </>
@@ -219,18 +203,6 @@ export function VesselActionsMenu({
 /* --------------------------------------------------------------------------
  * Subcomponents
  * -------------------------------------------------------------------------- */
-
-function GroupLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.5px] text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function Divider() {
-  return <DropdownMenu.Separator className="my-1 h-px bg-border" />;
-}
 
 function Item({
   icon,
@@ -250,7 +222,6 @@ function Item({
         onSelect();
       }}
       className={cn(
-        // Edge-to-edge highlight band — no narrow gap on left/right.
         "flex w-full cursor-pointer items-center gap-2.5 rounded-none px-3 py-1.5 text-[12px] font-medium",
         "outline-none transition-colors",
         danger

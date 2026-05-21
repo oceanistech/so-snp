@@ -246,6 +246,162 @@ export class VesselRepository {
             toDate: true,
           },
         },
+        // The 1:1 Order Book entry — present only on newbuilds. Pulled
+        // here so the detail page's "Order Book" card can render the
+        // status + milestone dates without a follow-up query.
+        orderBook: {
+          select: {
+            status: true,
+            orderDate: true,
+            constructionStartDate: true,
+            launchDate: true,
+            scheduledDeliveryDate: true,
+            cancelledDate: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Soft-delete a vessel — stamp `deletedAt = now()` so it disappears from
+   * the default org listing. `updateMany` returns `{ count }` so the
+   * service can detect "vessel not found / wrong org / already deleted"
+   * via `count === 0` and raise a typed error.
+   */
+  async softDelete(id: string, orgId: string) {
+    return this.db.vessel.updateMany({
+      where: { id, orgId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  /**
+   * Patch a vessel's editable fields. Org-scoped via `updateMany` so a
+   * caller from one org can't accidentally mutate another org's row.
+   */
+  async update(id: string, orgId: string, data: Prisma.VesselUpdateInput) {
+    return this.db.vessel.updateMany({
+      where: { id, orgId, deletedAt: null },
+      data,
+    });
+  }
+
+  /**
+   * Soft-delete every currently-active FleetVessel row for this vessel
+   * EXCEPT the one for `keepFleetId`. Used by the "Detach from all other
+   * fleets" row action so the vessel stays in the fleet the user is
+   * currently viewing while leaving every other fleet it was attached to.
+   * Returns `{ count }` reflecting how many rows were detached.
+   */
+  async detachFromOtherFleets(vesselId: string, keepFleetId: string) {
+    return this.db.fleetVessel.updateMany({
+      where: {
+        vesselId,
+        fleetId: { not: keepFleetId },
+        deletedAt: null,
+      },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  /**
+   * Reassign a vessel's fleet membership to exactly one fleet:
+   *   1. Soft-delete every currently-active FleetVessel row for the vessel.
+   *   2. If `fleetId` is non-null, insert (or restore) a row attaching
+   *      the vessel to that fleet.
+   * Atomic via `$transaction`. Returns the new active FleetVessel row
+   * (or `null` if `fleetId` is null — i.e. detach from all fleets).
+   */
+  async reassignToFleet(
+    vesselId: string,
+    fleetId: string | null,
+    addedBy: string | undefined,
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await tx.fleetVessel.updateMany({
+        where: { vesselId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      if (fleetId == null) return null;
+      // skipDuplicates handles the case where a soft-deleted row already
+      // exists for this (fleetId, vesselId) pair — we just insert a new
+      // active row alongside it instead of trying to un-soft-delete.
+      await tx.fleetVessel.createMany({
+        data: [{ fleetId, vesselId, addedBy }],
+        skipDuplicates: true,
+      });
+      return tx.fleetVessel.findFirst({
+        where: { fleetId, vesselId, deletedAt: null },
+        select: { id: true, fleetId: true, vesselId: true },
+      });
+    });
+  }
+
+  /**
+   * Hard-replace a vessel's sanctions list. The `VesselSanctionEntry`
+   * model has no `deletedAt` column (sanctions aren't soft-deletable —
+   * unlike vessels/fleets, the audit story is the `createdAt` history
+   * of the rows themselves), so we delete every existing entry for the
+   * vessel and createMany the new list in a transaction.
+   */
+  async replaceSanctions(
+    vesselId: string,
+    entries: {
+      authority: string;
+      program?: string;
+      startDate?: Date;
+      endDate?: Date;
+      description?: string;
+    }[],
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await tx.vesselSanctionEntry.deleteMany({ where: { vesselId } });
+      if (entries.length > 0) {
+        await tx.vesselSanctionEntry.createMany({
+          data: entries.map((e) => ({ vesselId, ...e })),
+        });
+      }
+      return { count: entries.length };
+    });
+  }
+
+  /**
+   * Read every active sanction entry for a vessel — used by the edit
+   * form to pre-fill the existing rows so the user can amend / remove
+   * them. Scoped to the vessel; org-scoping happens at the service
+   * layer via `getFullById`.
+   */
+  async getSanctionsByVesselId(vesselId: string) {
+    return this.db.vesselSanctionEntry.findMany({
+      where: { vesselId },
+      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        authority: true,
+        program: true,
+        startDate: true,
+        endDate: true,
+        description: true,
+      },
+    });
+  }
+
+  /**
+   * Read everything `VesselService.duplicate` / `update` / `moveToFleet`
+   * need: every scalar field plus the ids of attached fleets. Scoped by
+   * vessel id within the org. The Vessel ↔ VesselOrderBookEntry relation
+   * is named `orderBook` in the schema, not `orderBookEntry`.
+   */
+  async getFullById(id: string, orgId: string) {
+    return this.db.vessel.findFirst({
+      where: { id, orgId, deletedAt: null },
+      include: {
+        fleetVessels: {
+          where: { deletedAt: null },
+          select: { fleetId: true },
+        },
+        orderBook: true,
       },
     });
   }
