@@ -285,10 +285,18 @@ describe("VesselDetailTabs — Main Information", () => {
 
   it("renders Technical Specifications fields", () => {
     render(<VesselDetailTabs vessel={vessel()} />);
-    expect(screen.getByText(/Length Overall/)).toBeInTheDocument();
-    expect(screen.getByText("229 m")).toBeInTheDocument();
-    expect(screen.getByText(/Main Engine/)).toBeInTheDocument();
-    expect(screen.getByText(/MAN B&W 6G60ME/)).toBeInTheDocument();
+    // Scope to the Technical Specifications card. "Main Engine" also
+    // shows up as the title of a dedicated SpecCard further down the
+    // page (rendered when `engineModel.name` or `serviceSpeedKn` is
+    // present, both of which the default fixture sets), so an
+    // unscoped `getByText(/Main Engine/)` would match twice and throw.
+    const techSpecs = screen
+      .getByText("Technical Specifications")
+      .closest('[class*="bg-card"]') as HTMLElement;
+    expect(within(techSpecs).getByText(/Length Overall/)).toBeInTheDocument();
+    expect(within(techSpecs).getByText("229 m")).toBeInTheDocument();
+    expect(within(techSpecs).getByText("Main Engine")).toBeInTheDocument();
+    expect(within(techSpecs).getByText(/MAN B&W 6G60ME/)).toBeInTheDocument();
   });
 
   it("shows Employment placeholder copy when no Employment model data", () => {
