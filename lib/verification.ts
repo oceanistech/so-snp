@@ -59,7 +59,20 @@ export async function sendVerificationEmail(opts: {
 
 /**
  * Validate a token: look it up, check expiry, mark the user as verified,
- * delete the token (single-use). Returns the email on success, null otherwise.
+ * delete the token (single-use). On first verification we also create a
+ * personal Org + OWNER Membership so the user can immediately access
+ * `(app)/` routes — without it `requireSession()` throws
+ * `NoMembershipError` and every authenticated page 500s.
+ *
+ * Returns the email on success, null otherwise.
+ *
+ * NOTE on scope: this is a deliberately minimal onboarding flow suited
+ * to dev / staging where there's no real invite system yet. In a
+ * production multi-tenant setup the typical pattern is admin-issued
+ * invites that pre-create the Membership; on accepting the invite the
+ * user only gets bound to an existing Org. When that flow ships, the
+ * auto-org-creation block below should be gated behind a feature flag
+ * (e.g. `ALLOW_SELF_SERVE_ORG=true`) or removed.
  */
 export async function verifyToken(
   token: string,
@@ -78,13 +91,52 @@ export async function verifyToken(
 
   const email = record.identifier;
 
-  await prisma.$transaction([
-    prisma.user.update({
+  await prisma.$transaction(async (tx) => {
+    // Mark verified + consume the (single-use) token atomically.
+    const user = await tx.user.update({
       where: { email },
       data: { emailVerified: new Date() },
-    }),
-    prisma.verificationToken.delete({ where: { token } }),
-  ]);
+      select: {
+        id: true,
+        name: true,
+        memberships: { select: { id: true }, take: 1 },
+      },
+    });
+    await tx.verificationToken.delete({ where: { token } });
+
+    // If this user already belongs to an org (e.g. they were attached
+    // manually via SQL, or were invited in a future flow), skip
+    // auto-creation so we don't end up with a dangling second org.
+    if (user.memberships.length > 0) return;
+
+    // Derive a unique-ish slug from the email local part with a short
+    // random suffix. The Org table has @@unique on `slug` so a
+    // collision would throw — the random suffix makes that vanishingly
+    // unlikely for the volumes we expect on dev/staging.
+    const localPart = email.split("@")[0] ?? "workspace";
+    const baseSlug = localPart
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 30) || "workspace";
+    const slug = `${baseSlug}-${randomBytes(3).toString("hex")}`;
+
+    const orgName = user.name ? `${user.name}'s workspace` : `${localPart}'s workspace`;
+
+    const org = await tx.org.create({
+      data: { slug, name: orgName },
+      select: { id: true },
+    });
+
+    await tx.membership.create({
+      data: {
+        orgId: org.id,
+        userId: user.id,
+        role: "OWNER",
+      },
+    });
+  });
 
   return { email };
 }
