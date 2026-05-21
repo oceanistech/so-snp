@@ -23,10 +23,7 @@ import {
   ProjectCard,
   type Project,
 } from "@/components/app/project-card";
-import {
-  RequestStatusChip,
-  type RequestStatus,
-} from "@/components/app/request-status-chip";
+import { type RequestStatus } from "@/components/app/request-status-chip";
 import {
   EnvScoreBadge,
   type EnvScore,
@@ -981,7 +978,6 @@ const VESSEL_COMPARE_DATA: CompareVessel[] = [
 
 function VesselComparePanel() {
   const maxFmv = Math.max(...VESSEL_COMPARE_DATA.map((v) => v.fmv));
-  const maxNb  = Math.max(...VESSEL_COMPARE_DATA.map((v) => v.newbuild));
   const [selected, setSelected] = React.useState(
     VESSEL_COMPARE_DATA.map((v) => v.name),
   );

@@ -12,6 +12,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import type * as ReactModule from "react";
 import type { VesselFormState } from "@/lib/actions/vessel.form-state";
 import type {
   AddVesselReferenceData,
@@ -21,7 +22,7 @@ import type {
 let stateFixture: VesselFormState = { ok: false, formError: null, fieldErrors: {} };
 
 vi.mock("react", async () => {
-  const actual = await vi.importActual<typeof import("react")>("react");
+  const actual = await vi.importActual<typeof ReactModule>("react");
   return {
     ...actual,
     useActionState: () => [stateFixture, () => undefined, false],

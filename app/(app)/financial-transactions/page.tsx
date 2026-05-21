@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import {
   Construction,
   Download,
@@ -452,7 +451,9 @@ function AllTransactionsPanel() {
  * Tab — Disbursements
  * -------------------------------------------------------------------------- */
 
-function DisbursementsPanel() {
+// Tab panels are scaffolded ahead of the tab switcher wiring; the
+// prefix keeps lint quiet without losing the prototype implementations.
+function _DisbursementsPanel() {
   return (
     <>
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -556,7 +557,7 @@ function DisbursementsPanel() {
  * Tab — Repayments
  * -------------------------------------------------------------------------- */
 
-function RepaymentsPanel() {
+function _RepaymentsPanel() {
   return (
     <>
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -664,7 +665,7 @@ function RepaymentsPanel() {
  * Tab — Interest & Fees
  * -------------------------------------------------------------------------- */
 
-function InterestFeesPanel() {
+function _InterestFeesPanel() {
   return (
     <>
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -765,7 +766,7 @@ function InterestFeesPanel() {
  * Tab — Amortization Schedule
  * -------------------------------------------------------------------------- */
 
-function AmortizationPanel() {
+function _AmortizationPanel() {
   return (
     <>
       <Card>

@@ -14,6 +14,7 @@
  *   - unexpected service error → returns formError
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as FleetServiceModule from "@/lib/services/fleet.service";
 
 // Mock next/navigation's redirect — we don't want a thrown NEXT_REDIRECT
 // to interfere with assertions. We throw a plain Error with a tagged
@@ -33,8 +34,7 @@ vi.mock("@/lib/auth/session", () => ({
 
 const createMock = vi.fn();
 vi.mock("@/lib/services/fleet.service", async (importOriginal) => {
-  const actual =
-    (await importOriginal()) as typeof import("@/lib/services/fleet.service");
+  const actual = (await importOriginal()) as typeof FleetServiceModule;
   return {
     ...actual,
     FleetService: class {

@@ -292,7 +292,6 @@ const DASH: Record<FleetKey, FleetData> = { all: ALL, alpha: ALPHA, beta: BETA }
 export default function DashboardPage() {
   const [fleet, setFleet] = React.useState<FleetKey>("all");
   const data = DASH[fleet];
-  const fleetLabel = FLEET_OPTIONS.find((o) => o.value === fleet)?.label ?? "All Fleets";
   const subtitle = `Portfolio overview as of 27 Mar 2026 · All values in USD`;
 
   return (

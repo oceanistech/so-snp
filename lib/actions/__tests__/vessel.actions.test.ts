@@ -14,6 +14,7 @@
  *   - empty optional fields collapse to undefined before the service call
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as VesselServiceModule from "@/lib/services/vessel.service";
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
@@ -30,8 +31,7 @@ vi.mock("@/lib/auth/session", () => ({
 
 const createMock = vi.fn();
 vi.mock("@/lib/services/vessel.service", async (importOriginal) => {
-  const actual =
-    (await importOriginal()) as typeof import("@/lib/services/vessel.service");
+  const actual = (await importOriginal()) as typeof VesselServiceModule;
   return {
     ...actual,
     VesselService: class {

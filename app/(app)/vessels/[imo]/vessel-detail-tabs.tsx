@@ -15,7 +15,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Anchor, ChevronRight, FileSpreadsheet, Ship } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
-import { EnvScoreBadge } from "@/components/app/env-score-badge";
 import { cn } from "@/lib/utils";
 import type { VesselDetail } from "@/lib/services/vessel.service";
 
@@ -60,15 +59,6 @@ function rootOf(typeRoot: string): TypeRoot {
 /* --------------------------------------------------------------------------
  * Helpers
  * -------------------------------------------------------------------------- */
-
-const usd = (n: number | null) =>
-  n == null
-    ? "—"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(n);
 
 const usdShort = (n: number | null) => {
   if (n == null) return "—";

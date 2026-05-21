@@ -7,9 +7,9 @@
  */
 import {
   CounterpartyType,
-  PrismaClient,
   type Country,
   type Port,
+  type PrismaClient,
   type VesselType,
 } from "@prisma/client";
 

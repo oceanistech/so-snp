@@ -10,9 +10,9 @@ import {
   EmploymentStatus,
   EnvScore,
   FleetVisibility,
-  PrismaClient,
   VesselLifecycleStatus,
 } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 type FleetSeed = {
   slug: string;

@@ -15,13 +15,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import type * as ReactModule from "react";
 import type { AttachableVessel } from "@/lib/services/vessel.service";
 import type { FleetFormState } from "@/lib/actions/fleet.form-state";
 
 let stateFixture: FleetFormState = { ok: false, formError: null, fieldErrors: {} };
 
 vi.mock("react", async () => {
-  const actual = (await vi.importActual<typeof import("react")>("react"));
+  const actual = (await vi.importActual<typeof ReactModule>("react"));
   return {
     ...actual,
     useActionState: () => [stateFixture, () => undefined, false],
