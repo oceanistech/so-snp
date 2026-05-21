@@ -19,8 +19,36 @@ import type { VesselListItem } from "@/lib/services/vessel.service";
 
 const replaceMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
+  useRouter: () => ({ replace: replaceMock, push: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+}));
+
+// Sonner is used by row-level menus for placeholder toasts. Stub it so
+// the import doesn't pull in a window-only side-effect.
+vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }));
+
+// FleetspaceClient pulls in `VesselActionsMenu`, `FleetActionsMenu` and
+// the row-level menus, all of which import server actions from
+// `@/lib/actions/{vessel,fleet}.actions`. Those modules transitively
+// reach `next-auth@5.0.0-beta`, which contains an `import 'next/server'`
+// (bare specifier without `.js`) that Node's ESM resolver rejects under
+// vitest. Stubbing the action modules here short-circuits the import
+// chain. The actions themselves are covered by `lib/actions/__tests__/`.
+vi.mock("@/lib/actions/vessel.actions", () => ({
+  createVesselAction: vi.fn(),
+  deleteVesselAction: vi.fn(),
+  duplicateVesselAction: vi.fn(),
+  suggestDuplicateVesselNameAction: vi.fn(),
+  moveVesselToFleetAction: vi.fn(),
+  detachVesselFromOtherFleetsAction: vi.fn(),
+  editVesselAction: vi.fn(),
+}));
+vi.mock("@/lib/actions/fleet.actions", () => ({
+  createFleetAction: vi.fn(),
+  deleteFleetAction: vi.fn(),
+  editFleetAction: vi.fn(),
+  duplicateFleetAction: vi.fn(),
+  suggestDuplicateFleetNameAction: vi.fn(),
 }));
 
 import { FleetspaceClient } from "../fleetspace-client";
@@ -116,7 +144,11 @@ describe("FleetspaceClient — populated", () => {
         justCreated={null}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    // The standalone "Open" button was removed in OT-175 — the fleet
+    // row itself is clickable now (the <tr> carries the onOpenFleet
+    // handler). Clicking the fleet-name span bubbles up to the row
+    // and triggers the same open behaviour.
+    fireEvent.click(screen.getByText("Fleet Alpha"));
     // Detail view: filter bar + vessel row
     expect(screen.getByPlaceholderText(/search vessel name/i)).toBeInTheDocument();
     // Vessel name is now a button that opens the vessel as a sub-tab,
@@ -141,7 +173,7 @@ describe("FleetspaceClient — populated", () => {
         justCreated={null}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    fireEvent.click(screen.getByText("Fleet Alpha"));
     fireEvent.click(screen.getByRole("button", { name: "MV Pacific Star" }));
     // After click, the vessel-browser-bar should have both "All Vessels"
     // (with badge 1) and "MV Pacific Star" as a sub-tab.
@@ -164,7 +196,7 @@ describe("FleetspaceClient — populated", () => {
         justCreated={null}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    fireEvent.click(screen.getByText("Fleet Alpha"));
     const input = screen.getByPlaceholderText(/search vessel name/i);
     fireEvent.change(input, { target: { value: "cape" } });
     expect(screen.queryByText("MV Pacific Star")).not.toBeInTheDocument();

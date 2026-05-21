@@ -97,33 +97,60 @@ beforeEach(() => {
 });
 
 describe("AddVesselForm — structure", () => {
-  it("renders the IMO Quick Lookup placeholder + all four sections", () => {
+  it("renders the IMO Quick Lookup placeholder + the canonical sections", () => {
+    // The form was originally split into four big sections
+    // (Vessel Identification / Vessel Specifications /
+    //  Commercial & Financial / Notes). It has since been broken down
+    // into ~15 finer-grained sections that mirror the edit form. We
+    // assert on a representative subset to confirm the form rendered
+    // end-to-end without re-checking every title.
     renderForm();
     expect(screen.getByText(/quick lookup by imo/i)).toBeInTheDocument();
     expect(screen.getByText("Vessel Identification")).toBeInTheDocument();
-    expect(screen.getByText("Vessel Specifications")).toBeInTheDocument();
-    expect(screen.getByText("Commercial & Financial")).toBeInTheDocument();
+    expect(screen.getByText("Vessel Type & Classification")).toBeInTheDocument();
+    expect(screen.getByText("Build & Delivery")).toBeInTheDocument();
+    expect(screen.getByText("Principal Dimensions")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
   });
 
-  it("marks Vessel Name, IMO, Vessel Type, Year Built, DWT, Flag State as required", () => {
+  it("marks Vessel Name, IMO, Vessel Type, Year Built, Deadweight, Flag as required", () => {
+    // Field labels were renamed when the form was expanded:
+    //   "IMO Number"   → "IMO"
+    //   "DWT (tonnes)" → "Deadweight (t)"
+    //   "Flag State"   → "Flag"
+    //
+    // Several of these labels ("Flag", "DWT", ...) are also keys in the
+    // right-rail VesselPreview, so an un-scoped `getByText("Flag")`
+    // matches twice (the field label AND the preview row). FormField
+    // labels live inside a `<label>` element, while PreviewRow uses
+    // `<div>`, so scoping the matcher to `label span` removes the
+    // ambiguity.
     renderForm();
     for (const label of [
       "Vessel Name",
-      "IMO Number",
+      "IMO",
       "Vessel Type",
       "Year Built",
-      "DWT (tonnes)",
-      "Flag State",
+      "Deadweight (t)",
+      "Flag",
     ]) {
-      const parent = screen.getByText(label).parentElement!;
+      const parent = screen
+        .getByText(label, { selector: "label span" })
+        .parentElement!;
       expect(parent.textContent).toContain("*");
     }
   });
 
-  it("renders only flag-state countries in the Flag State dropdown", () => {
+  it("renders only flag-state countries in the Flag dropdown", () => {
+    // The Flag select is queried by its stable `name` attribute rather
+    // than by accessible name: the FormField label renders "Flag" plus
+    // a required-asterisk child span, so the accessible name resolves
+    // to "Flag *" and a `/^flag$/i` matcher misses it.
     renderForm();
-    const flagSelect = screen.getByRole("combobox", { name: /flag state/i }) as HTMLSelectElement;
+    const flagSelect = document.querySelector(
+      'select[name="flagCountryId"]',
+    ) as HTMLSelectElement;
+    expect(flagSelect).not.toBeNull();
     const optionTexts = Array.from(flagSelect.options).map((o) => o.textContent);
     expect(optionTexts).toContain("Liberia");
     expect(optionTexts).toContain("Panama");
@@ -134,7 +161,7 @@ describe("AddVesselForm — structure", () => {
 describe("AddVesselForm — two-level type picker", () => {
   it("disables the subtype dropdown until a parent is chosen", () => {
     renderForm();
-    const subtype = screen.getByRole("combobox", { name: /sub-type/i }) as HTMLSelectElement;
+    const subtype = screen.getByRole("combobox", { name: /vessel class/i }) as HTMLSelectElement;
     expect(subtype).toBeDisabled();
   });
 
@@ -142,7 +169,7 @@ describe("AddVesselForm — two-level type picker", () => {
     renderForm();
     const parent = screen.getByRole("combobox", { name: /vessel type/i }) as HTMLSelectElement;
     fireEvent.change(parent, { target: { value: "t-bulk" } });
-    const subtype = screen.getByRole("combobox", { name: /sub-type/i }) as HTMLSelectElement;
+    const subtype = screen.getByRole("combobox", { name: /vessel class/i }) as HTMLSelectElement;
     const opts = Array.from(subtype.options).map((o) => o.textContent);
     expect(opts).toContain("Panamax");
     expect(opts).toContain("Capesize");
@@ -163,7 +190,7 @@ describe("AddVesselForm — two-level type picker", () => {
     renderForm();
     const parent = screen.getByRole("combobox", { name: /vessel type/i }) as HTMLSelectElement;
     fireEvent.change(parent, { target: { value: "t-bulk" } });
-    const subtype = screen.getByRole("combobox", { name: /sub-type/i }) as HTMLSelectElement;
+    const subtype = screen.getByRole("combobox", { name: /vessel class/i }) as HTMLSelectElement;
     fireEvent.change(subtype, { target: { value: "t-bulk-panamax" } });
     const hidden = document.querySelector(
       'input[type="hidden"][name="vesselTypeId"]',
@@ -175,7 +202,7 @@ describe("AddVesselForm — two-level type picker", () => {
     renderForm();
     const parent = screen.getByRole("combobox", { name: /vessel type/i }) as HTMLSelectElement;
     fireEvent.change(parent, { target: { value: "t-bulk" } });
-    const subtype = screen.getByRole("combobox", { name: /sub-type/i }) as HTMLSelectElement;
+    const subtype = screen.getByRole("combobox", { name: /vessel class/i }) as HTMLSelectElement;
     fireEvent.change(subtype, { target: { value: "t-bulk-panamax" } });
     fireEvent.change(parent, { target: { value: "t-tank" } });
     expect(subtype.value).toBe("");
