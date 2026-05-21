@@ -152,7 +152,9 @@ const ORDER_PILL: Record<Ordering, string> = {
   over: "bg-signal-magenta/15 text-signal-magenta",
 };
 
-const ORDER_FILL: Record<Ordering, string> = {
+// Paired with ORDER_PILL for an upcoming filled-tone variant; kept here
+// so the colour mapping stays next to its pill counterpart.
+const _ORDER_FILL: Record<Ordering, string> = {
   under: "bg-signal-green",
   balanced: "bg-signal-orange",
   over: "bg-signal-magenta",

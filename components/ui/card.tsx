@@ -18,7 +18,22 @@ Card.displayName = "Card";
 /**
  * CardHeader — tuned to the prototype's `.card-header` from
  * html/assets/css/signal-design-system.css:
- *   padding: var(--sp-md) var(--sp-lg)  →  py-4 (16px) / px-6 (24px)
+ *   padding: var(--sp-md) var(--sp-lg)       →  py-3 (12px) / px-6 (24px)
+ *   border-bottom: 1px solid var(--color-border)  →  border-b
+ *   min-height                              →  ensures every card header
+ *                                              on a page renders at the
+ *                                              same height regardless of
+ *                                              whether the right side
+ *                                              carries an action chip /
+ *                                              button or not.
+ *
+ * The default layout is `flex flex-col justify-center` so the typical
+ * `<CardTitle/> + <CardDescription/>` stack vertically centers within
+ * the `min-h-[56px]` box. Headers that need action items on the right
+ * pass `className="flex flex-row items-center justify-between"` and the
+ * existing form-section pattern keeps working — the row override
+ * naturally fits inside the same 56px slot because the chip/button
+ * height (26px) + padding (12px × 2) = 50px ≤ 56px.
  *
  * NOTE: For consistency across pages, prefer the higher-level
  * `<AppCardHeader>` component (components/app/card-header.tsx) which
@@ -28,7 +43,14 @@ const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("flex flex-col space-y-1 px-6 py-4", className)} {...props} />
+  <div
+    ref={ref}
+    className={cn(
+      "flex min-h-[56px] flex-col justify-center space-y-1 border-b px-6 py-3",
+      className,
+    )}
+    {...props}
+  />
 ));
 CardHeader.displayName = "CardHeader";
 

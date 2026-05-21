@@ -48,6 +48,8 @@ function errorMessage(code: string | undefined): string | null {
       return "You don't have access to this application.";
     case "InvalidToken":
       return "That verification link is invalid or has expired. Try signing up again to receive a new one.";
+    case "InvalidResetToken":
+      return "That password reset link is invalid or has expired. Request a new one below.";
     default:
       return "Sign-in failed. Please try again.";
   }
@@ -56,11 +58,17 @@ function errorMessage(code: string | undefined): string | null {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; verified?: string; email?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    verified?: string;
+    reset?: string;
+    email?: string;
+  }>;
 }) {
-  const { error, verified, email } = await searchParams;
+  const { error, verified, reset, email } = await searchParams;
   const errMsg = errorMessage(error);
   const verifiedOk = verified === "1";
+  const resetOk = reset === "1";
 
   return (
     <main className="grid min-h-screen place-items-center bg-muted/40 p-6">
@@ -92,6 +100,15 @@ export default async function SignInPage({
               </div>
             ) : null}
 
+            {resetOk ? (
+              <div
+                role="status"
+                className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400"
+              >
+                Password updated. Sign in with your new password.
+              </div>
+            ) : null}
+
             {errMsg ? (
               <div
                 role="alert"
@@ -114,7 +131,15 @@ export default async function SignInPage({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-baseline justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   name="password"

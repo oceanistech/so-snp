@@ -1,0 +1,139 @@
+# Continuous integration for the web app.
+#
+# Triggers on:
+#   - Pull requests targeting main or any feature/* branch
+#   - Direct pushes to main and feature/* branches
+#
+# Pipeline:
+#   1. install dependencies (pnpm, with cache)
+#   2. typecheck
+#   3. lint
+#   4. unit + integration tests (Vitest)         — against a Postgres service
+#   5. end-to-end tests (Playwright)             — against the same Postgres
+#
+# Signal Ocean is never called from CI: tests stub it via MSW (unit) or
+# Playwright route handlers (E2E).
+name: CI
+
+on:
+  pull_request:
+    branches: [main, "feature/**"]
+  push:
+    branches: [main, "feature/**"]
+
+jobs:
+  test:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    # NOTE: this workflow file lives at `.github/workflows/ci.yml`
+    # because the GitHub repo root is the web app itself. Locally the
+    # app sits under a `web/` subfolder of the larger monorepo
+    # (`shipinvest/web/`), but only that subfolder is pushed to the
+    # repo. So we do NOT set `defaults.run.working-directory: web` —
+    # every `run` step executes at the repo root.
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: snp
+          POSTGRES_PASSWORD: snp
+          POSTGRES_DB: snp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U snp -d snp_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://snp:snp@localhost:5432/snp_test?schema=public
+      DIRECT_URL: postgresql://snp:snp@localhost:5432/snp_test?schema=public
+      AUTH_SECRET: ci-only-not-a-real-secret
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      SIGNAL_OCEAN_API_ENABLED: "false"
+      SIGNAL_OCEAN_API_ENDPOINT: https://api.signalocean.com
+      SIGNAL_OCEAN_API_KEY: ci-only-not-a-real-key
+      SIGNAL_OCEAN_LOOKUP_CACHE_DAYS: "7"
+      SIGNAL_OCEAN_TIMEOUT_MS: "5000"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # NOTE: don't use setup-node's built-in `cache: pnpm` here.
+          # pnpm 9.x + setup-node@v4 has a known bug where
+          # `pnpm store path --silent` returns a relative path before
+          # any install has happened, which setup-node then joins with
+          # the wrong base directory and fails with
+          # "Some specified paths were not resolved, unable to cache
+          # dependencies." We resolve the store path explicitly in the
+          # next step and feed it to actions/cache instead.
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        shell: bash
+        run: |
+          echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit + integration tests
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: coverage
+          if-no-files-found: ignore
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report
+          if-no-files-found: ignore

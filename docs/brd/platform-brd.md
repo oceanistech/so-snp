@@ -268,7 +268,41 @@ These rules supersede prototype practice. They exist so that future modules stay
 - Renovate or Dependabot raises monthly upgrade PRs; auto-merge for green patch updates only.
 - A platform-BRD entry must accompany any major-version upgrade that affects public APIs (Next.js, Prisma, Tailwind, shadcn).
 
-### 4.6 Decision Log
+### 4.6 Development Workflow
+
+**Working directory.** `web/` is the project root for all development commands. Every shell example in this BRD and the runbooks assumes the current working directory is `web/`.
+
+**Container-only tooling.** All `pnpm`, `node`, `prisma`, and `playwright` commands run inside the dev container (built from `Dockerfile.dev`). The host machine doesn't need a working `node_modules` for builds or tests. The canonical command form is:
+
+```bash
+docker compose exec so-snp-web pnpm <script>
+```
+
+Rationale: the container runs Linux x86_64 with a known Node 22 + pnpm 9.15.0 toolchain; the host (typically macOS arm64) hits inconsistent native-binary issues with optional dependencies (Rollup, esbuild, swc). Keeping all build/test commands in one runtime eliminates "works on my machine" drift, matches CI exactly, and keeps the husky pre-commit / pre-push hooks consistent.
+
+The host install is supported only for IDE autocomplete and is documented as optional in `web/docs/runbooks/getting-started.md`.
+
+**Testing toolchain.**
+
+| Tool | Purpose | Where it runs |
+|---|---|---|
+| Vitest | Unit + integration tests, RTL component tests | Dev container |
+| @testing-library/react | DOM testing for React components | Dev container |
+| MSW | Mocking external APIs (Signal Ocean) | Dev container |
+| Playwright | End-to-end browser tests | CI; locally only when Playwright deps are baked into the image |
+| GitHub Actions | CI pipeline running typecheck, lint, Vitest, Playwright | CI |
+
+See `web/docs/architecture/testing-strategy.md` for the full strategy.
+
+**Commit message convention.** Every commit on a feature branch carries the Jira ticket ID as a prefix:
+
+```
+OT-NNN - <single line, imperative, ≤72 chars>
+```
+
+This ties every change back to its tracker entry. Use the active branch's ticket ID (e.g. `OT-175` for `feature/OT-175-fleets-and-vessels`).
+
+### 4.7 Decision Log
 
 When the platform stack changes, append an entry here with date, decision, rationale, and the PR or ADR link. Foundational stack choices that need ADRs in `docs/BRD/` ride alongside this section.
 
@@ -1268,6 +1302,26 @@ The current planning state. Updated each sprint review. Today (2026-04-30) every
 | T02-5.2.1 | Add / remove vessel actions | P1 | T02-1.1.2 | brd.md §7.2 FL-7 |
 | T02-5.3.1 | CSV/Excel export of vessel table | P2 | F7 | brd.md §7.2 FL-8 |
 
+### Implementation status — OT-175 (May 2026)
+
+The Fleets listing and Create Fleet form ship as part of OT-175. What's
+landed and what's still parked for later sprints:
+
+| Story | Status | Notes |
+|---|---|---|
+| S02-1.1 (tabs + active fleet) | **Done** | All-Fleets list + per-fleet openable tabs; URL `?created=<id>` carries the create-flow success banner. |
+| S02-2.1 (vessel table columns) | **Done (initial)** | Name, IMO, Type, Year, DWT, Env, FMV, On-Sale. Resale / Newbuild / ValCert columns parked until M06 valuation cert data lands. |
+| S02-2.2 (filters) | **Done** | Type / Year-Built bucket / name search, client-side over the loaded page. |
+| S02-3.1 (vessel detail tabs) | **Done** | `/fleetspace` now renders a vessel-browser-bar inside the fleet view: "All Vessels (count)" + per-vessel openable sub-tabs (closeable). Clicking a vessel name in the fleet table opens that vessel as a sub-tab; content lazy-loads via `/api/vessels/[id]` and is cached client-side so re-opening is instant. |
+| S02-3.2 (context widget collapse) | **Done** | The fleet KPI row + filter bar belong to the All Vessels sub-tab and only render when it's active. Switching to a vessel sub-tab swaps in `VesselDetailTabs` (Main Information + the seven M06+ placeholder tabs) so the fleet context is implicitly hidden. |
+| S02-4.1 (Employment Timeline) | Pending | Needs Employment + Charterer model (M02 — planned for OT-176+). |
+| S02-4.2 (TC Expirations) | Pending | Same — needs Employment model. |
+| S02-5.1 (create + rename + delete) | **Create done** | Rename/delete come with the row-actions step. |
+| S02-5.2 (add / remove vessel) | **Add done (via create form)** | Per-row Add/Remove on fleet detail tracked for the row-actions step. |
+| S02-5.3 (CSV/Excel export) | Pending | F7 helper not built yet. |
+
+Architecture: `web/docs/architecture/fleets-and-vessels.md`.
+
 ---
 
 ## M03. Add Vessel & Create Fleet
@@ -1314,6 +1368,74 @@ The current planning state. Updated each sprint review. Today (2026-04-30) every
 | T03-1.2.2 | Wire lookup to populate form | P1 | T03-1.2.1 | add-vessel.html |
 | T03-2.1.1 | `/fleets/new` page + form | P1 | M02 base | create-fleet.html |
 | T03-2.1.2 | Multi-select vessels combobox | P1 | F3 combobox | create-fleet.html |
+
+### Implementation status — OT-175 (May 2026)
+
+The Add Vessel flow ships as part of OT-175. What landed and what's still
+parked for later sprints:
+
+| Story | Status | Notes |
+|---|---|---|
+| S03-1.1 (sectioned form) | **Done** | `/vessels/new` renders Identification, Specifications, Commercial & Financial, Notes; submits via `createVesselAction` server action; redirects to `/vessels/{id}?created=1`. |
+| S03-1.2 (IMO lookup) | Pending | Quick Lookup card shows a "coming soon" placeholder; Signal Ocean client + `/api/vessels/lookup` route land in OT-177. |
+| S03-2.1 (create fleet) | **Done** (OT-175 earlier batch) | See M02 implementation table. |
+| "Save as Draft" (T03-1.1.3) | Pending | The schema models lifecycle = ACTIVE / DRYDOCK / LAID_UP / UNDER_REPAIR / RETIRED, but there's no `DRAFT` state today. Will be added with the edit flow. |
+
+**Vessel-type picker decision.** The form uses a two-level picker: parent
+`VesselType` (Bulk, Tanker, Gas, …) feeds a subtype dropdown filtered
+client-side. The hidden `vesselTypeId` input that posts to the action is
+always the leaf id (subtype) if available, otherwise the parent id. The
+parent/subtype dataset is fetched once via `ReferenceService.loadAddVesselData()`.
+
+**Schema expansion (OT-175 batch 12).** The Add Vessel form was rebuilt to
+mirror the latest `html/add-vessel.html` prototype, adding ~80 new
+nullable columns to the Vessel model across 17 sections — Vessel
+Identification extras (flagCode, classRenewalDate), Vessel Type &
+Classification (builtForTrade, currentTrade, designModel, iceClass,
+propulsionType, cleanDirtyWilling), Build & Delivery (builtCountry,
+yardNumber, deliveryDate, scrappedDate), Principal Dimensions extras
+(mouldedDepthM, airDraughtM, lightshipT, summerTpc), Tonnage (reducedGrt,
+panamaCanalNrt, suezCanalNrt), Cargo Capacity (cubicSizeM3, grainCapacityM3,
+baleCapacityM3, teu/teuAt14t/deckTeu/underDeckTeu, reefers), Holds /
+Hatches / Cranes & Grabs (counts + 4 text-details + 8 equipment-fitted
+booleans), Parallel Body Length (laden/ballast/empty), Manifold (4
+tanker dimensions), Tanker Equipment (imoType, 3 system booleans, 5
+coating ints), Bow Equipment (chain stoppers + thrusters), Main Engine
+(manufacturer, powerKw, rpm, mewisDuct), Gas Carrier (containment, temp,
+pressure, 3 cargo booleans), Environmental & Compliance (ghgRating,
+scrubbersInstalledDate, BWTS, neoPanamaLocks, sternLine), Operators &
+Owners (commercialOperator, beneficialOwner). Plus two new related
+tables: `VesselOrderBookEntry` (1:1, 5 dates + status enum for
+newbuilds) and `VesselSanctionEntry` (many-per-vessel: authority,
+program, dates, description). All new fields are optional/nullable so
+existing forms / API consumers stay backwards-compatible. Vessel
+detail-page projection is unchanged in this batch — the new fields are
+returned by the repository but not yet rendered until the next UI
+iteration.
+
+**Vessel detail page.** `/vessels/[imo]/page.tsx` now treats its dynamic
+segment as a Prisma CUID (not an IMO) per ADR-0002. The directory name is
+preserved to avoid a permission-gated rename; a follow-up housekeeping step
+will rename to `[id]`.
+
+The page mirrors `html/vessel-details.html`'s Main Information tab one-
+for-one: a hero card (real image when `heroImageUrl` is set, gradient +
+ship icon placeholder otherwise), a 2×2 KPI grid (DWT / Year Built / FMV
+/ Env Score), a Vessel Profile + Technical Specifications row, then a
+Current Employment + Certificates & Documents + Ownership History row.
+Real DB values are used wherever they exist; placeholder copy points to
+the future module otherwise (Employment → M02, Certificates / Ownership
+edit UI → M06 Vessel Detail).
+
+The prototype's other 7 sub-tabs — Valuations, Net Fleet, Financial
+Transactions, Earnings & Expenses, IRR, Environmental Score, Valuation
+Certificates — render with their tab strip + a `ComingInModulePlaceholder`
+card pointing at the owning module's ticket. Tab state is mirrored to
+`?tab=<key>` in the URL so deep links work.
+
+Edit / Delete actions are placeholders pending the row-actions step.
+
+Architecture: `web/docs/architecture/fleets-and-vessels.md`.
 
 ---
 

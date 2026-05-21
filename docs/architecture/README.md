@@ -1,10 +1,17 @@
 # Architecture
 
-Component diagrams, request-flow walkthroughs, and deployment topology.
+Component diagrams, request-flow walkthroughs, deployment topology, and
+cross-cutting engineering concerns.
 
 ## Index
 
-_(empty — populate as the system grows.)_
+| Doc | Scope |
+|---|---|
+| [`database.md`](./database.md) | Schema conventions, ER diagrams, soft-delete pattern, migration workflow |
+| [`testing-strategy.md`](./testing-strategy.md) | How automated testing is organised (Vitest, Playwright, MSW, CI) |
+
+_(more docs added as the system grows — fleets & vessels module,
+Signal Ocean integration, URL conventions.)_
 
 ## Conventions
 

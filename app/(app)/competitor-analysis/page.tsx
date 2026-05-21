@@ -883,11 +883,13 @@ function FleetSidePanel({
   dotColor,
   title,
   bars,
-  muted = false,
+  muted: _muted = false,
 }: {
   dotColor: string;
   title: string;
   bars: CompBar[];
+  /** Kept on the prop surface so call sites can flag a side panel as
+   *  muted; the styling hook itself hasn't been wired yet. */
   muted?: boolean;
 }) {
   return (
@@ -923,7 +925,9 @@ function FleetSidePanel({
   );
 }
 
-function ToneDot({ tone }: { tone: FavorTone }) {
+// Reserved for an upcoming favor-tone indicator on the panels above; the
+// component is kept inline so we don't lose the styling reference.
+function _ToneDot({ tone }: { tone: FavorTone }) {
   return (
     <span
       className={cn(
