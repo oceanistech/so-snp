@@ -64,13 +64,35 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.0
+          run_install: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          # NOTE: don't use setup-node's built-in `cache: pnpm` here.
+          # pnpm 9.x + setup-node@v4 has a known bug where
+          # `pnpm store path --silent` returns a relative path before
+          # any install has happened, which setup-node then joins with
+          # the wrong base directory and fails with
+          # "Some specified paths were not resolved, unable to cache
+          # dependencies." We resolve the store path explicitly in the
+          # next step and feed it to actions/cache instead.
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        shell: bash
+        working-directory: web
+        run: |
+          echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
