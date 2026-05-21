@@ -25,9 +25,12 @@ jobs:
   test:
     name: Lint, typecheck, test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
+    # NOTE: this workflow file lives at `.github/workflows/ci.yml`
+    # because the GitHub repo root is the web app itself. Locally the
+    # app sits under a `web/` subfolder of the larger monorepo
+    # (`shipinvest/web/`), but only that subfolder is pushed to the
+    # repo. So we do NOT set `defaults.run.working-directory: web` —
+    # every `run` step executes at the repo root.
 
     services:
       postgres:
@@ -82,7 +85,6 @@ jobs:
       - name: Resolve pnpm store path
         id: pnpm-store
         shell: bash
-        working-directory: web
         run: |
           echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
@@ -90,7 +92,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('web/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
@@ -117,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ github.run_id }}
-          path: web/coverage
+          path: coverage
           if-no-files-found: ignore
 
       - name: Install Playwright browsers
@@ -133,5 +135,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_id }}
-          path: web/playwright-report
+          path: playwright-report
           if-no-files-found: ignore
