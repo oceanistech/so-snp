@@ -23,6 +23,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, Info, Search } from "lucide-react";
 import { AppPageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,24 @@ export function AddVesselForm({
     [vesselTypes],
   );
 
+  // `?returnTo=/fleetspace/create` is set when the user clicks "Add New
+  // Vessel" from the Create-Fleet (or Edit-Fleet) flow. We forward it
+  // into the form as a hidden input so `createVesselAction` can
+  // redirect back to the originating screen on success instead of the
+  // default `/vessels/<id>` detail view. The action whitelists which
+  // paths are allowed; this client just preserves the value verbatim.
+  //
+  // `?fleetId=<id>` is set when the user opens this form from a
+  // specific fleet's sub-tab view — we pre-select that fleet in the
+  // "Fleet" dropdown below so the new vessel is automatically attached
+  // to it on save. Without this, the post-save redirect would land on
+  // the fleet view but the vessel sub-tab wouldn't open (the
+  // `?vessel=` URL contract requires the vessel to be a member of the
+  // fleet).
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") ?? "";
+  const initialFleetId = searchParams.get("fleetId") ?? "";
+
   const [state, formAction, isPending] = useActionState<VesselFormState, FormData>(
     createVesselAction,
     INITIAL_VESSEL_FORM_STATE,
@@ -122,7 +141,14 @@ export function AddVesselForm({
   // for the older 3-letter convention). Held in React state because the
   // value needs to flip live the moment the flag select changes.
   const [flagCode, setFlagCode] = React.useState<string>("");
-  const [fleetId, setFleetId] = React.useState<string>("");
+  // Pre-select the fleet when arriving via `?fleetId=…`, but only if
+  // the id actually exists in the org's fleets list — drop the hint
+  // silently otherwise so a stale link can't break the dropdown.
+  const [fleetId, setFleetId] = React.useState<string>(() =>
+    initialFleetId && fleets.some((f) => f.id === initialFleetId)
+      ? initialFleetId
+      : "",
+  );
 
   // Subtypes for the currently-picked parent
   const subTypes = React.useMemo(
@@ -950,6 +976,15 @@ export function AddVesselForm({
                   at the bottom: "Add to Fleet" → ACTIVE; "Save as Draft" →
                   DRAFT.) */}
               <input type="hidden" name="currency" value="USD" />
+              {/* `returnTo` lets server actions redirect back to the
+                  originating screen (e.g. /fleetspace/create) instead
+                  of the default vessel-detail view. The action
+                  whitelists which paths are allowed before honouring
+                  this value. Empty string when the user opened
+                  /vessels/new directly. */}
+              {returnTo ? (
+                <input type="hidden" name="returnTo" value={returnTo} />
+              ) : null}
             </div>
           </Card>
 

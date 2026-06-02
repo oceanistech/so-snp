@@ -231,7 +231,7 @@ export function CreateFleetForm({
                 </span>
               ) : null}
               <Button asChild size="sm" variant="secondary">
-                <Link href="/vessels/new">
+                <Link href="/vessels/new?returnTo=%2Ffleetspace%2Fcreate">
                   <Plus className="size-3" />
                   Add New Vessel
                 </Link>
@@ -264,7 +264,7 @@ export function CreateFleetForm({
                 </div>
                 <div className="mt-3">
                   <Button asChild size="sm">
-                    <Link href="/vessels/new">
+                    <Link href="/vessels/new?returnTo=%2Ffleetspace%2Fcreate">
                       <Plus className="size-3" />
                       Add Vessel
                     </Link>

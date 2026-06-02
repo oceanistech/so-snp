@@ -41,6 +41,41 @@ function asOptional(v: FormDataEntryValue | null): string | undefined {
   return s === "" ? undefined : s;
 }
 
+/**
+ * Validate a `returnTo` value posted from the vessel-create form. We
+ * never want to redirect to an attacker-controlled URL, so this only
+ * honours internal paths that match a small whitelist of expected
+ * originators (the Create- and Edit-Fleet screens that link to
+ * `/vessels/new?returnTo=…`).
+ *
+ * Returns the safe path or `null` if the value is missing / not on the
+ * whitelist. Callers fall back to the default detail-page redirect when
+ * the result is `null`.
+ */
+function safeReturnTo(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+
+  // Must be a same-origin path: starts with a single `/`, no scheme,
+  // no `//` protocol-relative shenanigans, no backslash.
+  if (!trimmed.startsWith("/")) return null;
+  if (trimmed.startsWith("//") || trimmed.startsWith("/\\")) return null;
+
+  // Whitelist by path prefix. Add new entries here whenever a new
+  // originating screen needs to round-trip through /vessels/new. The
+  // dynamic-slug variant uses a regex because the slug is org-author
+  // controlled.
+  if (trimmed === "/fleetspace/create") return trimmed;
+  if (/^\/fleetspace\/[a-z0-9-]+\/edit$/i.test(trimmed)) return trimmed;
+  // Fleet-detail sub-tab view — `/fleetspace?fleet=<cuid>`. The fleet
+  // id is a cuid (alphanumeric); the regex is intentionally strict so
+  // an attacker can't smuggle extra params past the gate.
+  if (/^\/fleetspace\?fleet=[a-z0-9]+$/i.test(trimmed)) return trimmed;
+
+  return null;
+}
+
 export async function createVesselAction(
   _prev: VesselFormState,
   formData: FormData,
@@ -277,6 +312,28 @@ export async function createVesselAction(
     };
   }
 
+  // If the form came from a Create-Fleet / Edit-Fleet / fleet-detail
+  // screen (we threaded a `returnTo` hidden input through the form),
+  // send the user back to that screen instead of the default
+  // vessel-detail page. The query param we append depends on the
+  // shape of `returnTo`:
+  //
+  //   - `/fleetspace?fleet=<id>` → append `&vessel=<newId>`. This
+  //     matches the existing URL contract in `fleetspace-client.tsx`,
+  //     which opens that vessel as a sub-tab on hydration. Requires
+  //     the vessel to be a member of the fleet — `fleetId` on the form
+  //     handles that.
+  //   - Other whitelisted paths (Create / Edit Fleet) → append
+  //     `?vesselCreated=<newId>` so the originating screen can
+  //     optionally pre-select / highlight the new row.
+  const returnTo = safeReturnTo(formData.get("returnTo"));
+  if (returnTo) {
+    const sep = returnTo.includes("?") ? "&" : "?";
+    const paramName = returnTo.startsWith("/fleetspace?fleet=")
+      ? "vessel"
+      : "vesselCreated";
+    redirect(`${returnTo}${sep}${paramName}=${encodeURIComponent(createdId)}`);
+  }
   redirect(`/vessels/${encodeURIComponent(createdId)}?created=1`);
 }
 

@@ -389,7 +389,22 @@ export function FleetspaceClient({
               </Link>
             </Button>
             <Button asChild className="gap-1.5" variant="secondary">
-              <Link href="/vessels/new">
+              {/* When a specific fleet view is active, thread the fleet
+                  id through `/vessels/new` so the form pre-selects it
+                  and the post-save redirect lands back on this fleet's
+                  sub-tab strip with the new vessel opened as a tab.
+                  When on the global "All Fleets" view, no fleet
+                  context to forward — the link stays the bare
+                  `/vessels/new`. */}
+              <Link
+                href={
+                  activeFleet
+                    ? `/vessels/new?returnTo=${encodeURIComponent(
+                        `/fleetspace?fleet=${activeFleet.id}`,
+                      )}&fleetId=${encodeURIComponent(activeFleet.id)}`
+                    : "/vessels/new"
+                }
+              >
                 <Plus className="size-3.5" />
                 Add Vessel
               </Link>

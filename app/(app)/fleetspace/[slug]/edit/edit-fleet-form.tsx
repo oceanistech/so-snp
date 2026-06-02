@@ -246,7 +246,14 @@ export function EditFleetForm({
                 </span>
               ) : null}
               <Button asChild size="sm" variant="secondary">
-                <Link href="/vessels/new">
+                {/* Round-trip back to this Edit-Fleet screen after the
+                    vessel is created — see `safeReturnTo()` in
+                    `lib/actions/vessel.actions.ts` for the whitelist. */}
+                <Link
+                  href={`/vessels/new?returnTo=${encodeURIComponent(
+                    `/fleetspace/${fleet.slug}/edit`,
+                  )}`}
+                >
                   <Plus className="size-3" />
                   Add New Vessel
                 </Link>
@@ -280,7 +287,11 @@ export function EditFleetForm({
                 </div>
                 <div className="mt-3">
                   <Button asChild size="sm">
-                    <Link href="/vessels/new">
+                    <Link
+                      href={`/vessels/new?returnTo=${encodeURIComponent(
+                        `/fleetspace/${fleet.slug}/edit`,
+                      )}`}
+                    >
                       <Plus className="size-3" />
                       Add Vessel
                     </Link>
